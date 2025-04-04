@@ -14,14 +14,14 @@ const TestConnectionButton = () => {
       
       if (result.success) {
         toast({
-          title: 'Connection Successful',
-          description: 'Successfully connected to the MSSQL database.',
+          title: 'Connection Simulation Successful',
+          description: 'Connection settings saved. In a production environment, these settings would be used to connect to your database through a secure backend.',
           variant: 'default',
         });
       } else {
         toast({
-          title: 'Connection Failed',
-          description: result.message || 'Could not connect to the database.',
+          title: 'Connection Simulation Failed',
+          description: result.message || 'Connection simulation failed. Please check your settings.',
           variant: 'destructive',
         });
       }

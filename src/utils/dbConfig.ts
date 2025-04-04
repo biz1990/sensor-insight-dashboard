@@ -1,6 +1,11 @@
 
 /**
  * Database configuration for MS SQL Server connection
+ * 
+ * Note: In a browser environment, this configuration is used for:
+ * 1. UI display purposes
+ * 2. Sending to a backend API that would perform the actual connection
+ * 3. Simulation in development
  */
 export const dbConfig = {
   server: localStorage.getItem('db_server') || 'localhost',
