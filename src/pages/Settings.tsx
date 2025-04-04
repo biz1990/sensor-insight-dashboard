@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,29 +7,38 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { dbConfig, saveDbConfig } from '@/utils/dbConfig';
+import TestConnectionButton from '@/components/TestConnectionButton';
 
 const Settings = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [databaseSettings, setDatabaseSettings] = useState({
-    server: 'localhost',
-    database: 'SensorDB',
-    username: 'sa',
-    password: '',
-    port: '1433',
+    server: dbConfig.server,
+    database: dbConfig.database,
+    username: dbConfig.user,
+    password: dbConfig.password,
+    port: dbConfig.port.toString(),
   });
   
   const handleSaveDatabaseSettings = async () => {
     setIsLoading(true);
     try {
-      // In a real app, this would make an API call to save these settings
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      
-      toast({
-        title: 'Settings saved',
-        description: 'Database connection settings have been updated.',
+      const success = saveDbConfig({
+        server: databaseSettings.server,
+        database: databaseSettings.database,
+        user: databaseSettings.username,
+        password: databaseSettings.password,
+        port: parseInt(databaseSettings.port, 10)
       });
+      
+      if (success) {
+        toast({
+          title: 'Settings saved',
+          description: 'Database connection settings have been updated.',
+        });
+      }
     } catch (error) {
       console.error('Error saving database settings:', error);
       toast({
@@ -45,7 +53,6 @@ const Settings = () => {
   
   const handleResetPassword = async () => {
     try {
-      // In a real app, this would trigger a password reset email
       toast({
         title: 'Password reset email sent',
         description: 'Please check your email for password reset instructions.',
@@ -177,13 +184,15 @@ const Settings = () => {
                   />
                 </div>
                 
-                <Button 
-                  onClick={handleSaveDatabaseSettings} 
-                  className="mt-4"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Saving...' : 'Save Connection Settings'}
-                </Button>
+                <div className="flex space-x-2">
+                  <Button 
+                    onClick={handleSaveDatabaseSettings} 
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Saving...' : 'Save Connection Settings'}
+                  </Button>
+                  <TestConnectionButton />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -217,7 +226,6 @@ const Settings = () => {
               <p className="text-sm text-muted-foreground pb-4">
                 Configure notification settings for alerts, warnings, and system messages.
               </p>
-              {/* Notification settings would go here */}
               <div className="flex items-center space-x-2">
                 <input type="checkbox" id="email-alerts" className="rounded border-gray-300" />
                 <Label htmlFor="email-alerts">Receive email alerts for critical warnings</Label>
