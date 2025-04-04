@@ -1,11 +1,13 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Gauge, AreaChart, ThermometerIcon, ActivityIcon, ServerIcon, UsersIcon } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Introduction = () => {
+  const { user } = useAuth();
+  
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-slate-900 dark:to-slate-800 flex flex-col">
       <div className="container mx-auto px-4 py-12 flex-1 flex flex-col">
@@ -52,12 +54,20 @@ const Introduction = () => {
         </div>
 
         <div className="flex justify-center mt-12">
-          <Link to="/login">
-            <Button size="lg" className="mr-4">Login</Button>
-          </Link>
-          <Link to="/register">
-            <Button size="lg" variant="outline">Register</Button>
-          </Link>
+          {user ? (
+            <Link to="/dashboard">
+              <Button size="lg" className="mr-4">Go to Dashboard</Button>
+            </Link>
+          ) : (
+            <>
+              <Link to="/login">
+                <Button size="lg" className="mr-4">Login</Button>
+              </Link>
+              <Link to="/register">
+                <Button size="lg" variant="outline">Register</Button>
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="mt-16 md:mt-20 text-center">

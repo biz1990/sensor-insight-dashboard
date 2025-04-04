@@ -45,7 +45,7 @@ const Login = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const success = await login(values.email, values.password);
     if (success) {
-      navigate('/');
+      navigate('/dashboard');
     }
   };
 
