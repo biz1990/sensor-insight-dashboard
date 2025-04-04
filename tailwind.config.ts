@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,14 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// Custom colors for our sensor dashboard
+				sensor: {
+					temperature: '#FF6B6B',
+					humidity: '#4ECDC4',
+					warning: '#FFE66D',
+					danger: '#FF6B6B',
+					success: '#6BFF95'
 				}
 			},
 			borderRadius: {
