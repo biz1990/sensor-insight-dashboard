@@ -51,3 +51,19 @@ export interface DateRange {
   from: Date;
   to: Date;
 }
+
+export interface DatabaseConfig {
+  server: string;
+  database: string;
+  username: string;
+  password: string;
+  port: string;
+  useIntegratedSecurity?: boolean;
+  trustServerCertificate?: boolean;
+}
+
+export interface DbConnection {
+  isConnected: boolean;
+  lastConnectedAt?: string;
+  config: DatabaseConfig;
+}

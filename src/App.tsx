@@ -6,11 +6,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import PrivateRoute from "@/components/PrivateRoute";
+import Introduction from "@/pages/Introduction";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import Devices from "@/pages/Devices";
 import DeviceDetail from "@/pages/DeviceDetail";
+import Settings from "@/pages/Settings";
 import UsersAdmin from "@/pages/admin/UsersAdmin";
 import LocationsAdmin from "@/pages/admin/LocationsAdmin";
 import ThresholdsAdmin from "@/pages/admin/ThresholdsAdmin";
@@ -29,13 +31,14 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             {/* Public routes */}
+            <Route path="/" element={<Introduction />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
             
             {/* Private routes */}
             <Route 
-              path="/" 
+              path="/dashboard" 
               element={
                 <PrivateRoute>
                   <Dashboard />
@@ -63,6 +66,14 @@ const App = () => (
               element={
                 <PrivateRoute>
                   <ExportData />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/settings" 
+              element={
+                <PrivateRoute>
+                  <Settings />
                 </PrivateRoute>
               } 
             />

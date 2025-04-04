@@ -51,6 +51,8 @@ const UsersAdmin = () => {
   const [newUser, setNewUser] = useState({
     username: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     role: 'user',
     isActive: true,
   });
@@ -73,8 +75,28 @@ const UsersAdmin = () => {
     }
   };
 
+  const validateNewUser = () => {
+    if (!newUser.username) return "Username is required";
+    if (!newUser.email) return "Email is required";
+    if (!newUser.email.includes('@')) return "Invalid email format";
+    if (!newUser.password) return "Password is required";
+    if (newUser.password.length < 6) return "Password must be at least 6 characters";
+    if (newUser.password !== newUser.confirmPassword) return "Passwords don't match";
+    return null;
+  };
+
   const handleAddUser = async () => {
     try {
+      const validationError = validateNewUser();
+      if (validationError) {
+        toast({
+          title: "Validation Error",
+          description: validationError,
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // In a real application, this would be an API call
       const newId = Math.max(...users.map(u => u.id)) + 1;
       const currentDate = new Date().toISOString();
@@ -91,7 +113,14 @@ const UsersAdmin = () => {
       
       setUsers([...users, createdUser]);
       setIsAddDialogOpen(false);
-      setNewUser({ username: '', email: '', role: 'user', isActive: true });
+      setNewUser({ 
+        username: '', 
+        email: '', 
+        password: '', 
+        confirmPassword: '', 
+        role: 'user', 
+        isActive: true 
+      });
       
       toast({
         title: "User created",
@@ -208,6 +237,30 @@ const UsersAdmin = () => {
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="password" className="text-right">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="confirmPassword" className="text-right">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={newUser.confirmPassword}
+                  onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="role" className="text-right">
                   Role
                 </Label>
@@ -245,7 +298,7 @@ const UsersAdmin = () => {
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddUser} disabled={!newUser.username || !newUser.email}>
+              <Button onClick={handleAddUser}>
                 Add User
               </Button>
             </DialogFooter>

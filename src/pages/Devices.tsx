@@ -2,14 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, PlusCircle } from 'lucide-react';
 import DeviceList from '@/components/DeviceList';
 import { getDevicesWithLatestReadings } from '@/services/mockData';
 import { Device } from '@/types';
+import AddDeviceDialog from '@/components/AddDeviceDialog';
 
 const Devices = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
 
   useEffect(() => {
     fetchDevices();
@@ -35,6 +37,25 @@ const Devices = () => {
     fetchDevices();
   };
 
+  const handleAddDevice = (newDevice: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => {
+    // In a real app, this would call an API to create the device
+    const deviceId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
+    const now = new Date().toISOString();
+    
+    const createdDevice: Device = {
+      id: deviceId,
+      name: newDevice.name,
+      serialNumber: newDevice.serialNumber,
+      locationId: newDevice.locationId,
+      status: 'offline', // New devices start as offline
+      createdAt: now,
+      updatedAt: now
+    };
+    
+    setDevices([...devices, createdDevice]);
+    setIsAddDeviceOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -45,10 +66,16 @@ const Devices = () => {
             View and manage all your sensor devices
           </p>
         </div>
-        <Button onClick={handleRefresh} className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsAddDeviceOpen(true)} className="gap-2">
+            <PlusCircle className="h-4 w-4" />
+            Add Device
+          </Button>
+          <Button onClick={handleRefresh} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Device List */}
@@ -67,6 +94,13 @@ const Devices = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Device Dialog */}
+      <AddDeviceDialog 
+        open={isAddDeviceOpen} 
+        onOpenChange={setIsAddDeviceOpen}
+        onAdd={handleAddDevice}
+      />
     </div>
   );
 };
