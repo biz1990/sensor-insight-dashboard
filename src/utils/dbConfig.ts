@@ -34,5 +34,40 @@ export const saveDbConfig = (config: {
   localStorage.setItem('db_username', config.user);
   localStorage.setItem('db_password', config.password);
   localStorage.setItem('db_port', config.port.toString());
+  
+  // Return true to indicate success
   return true;
+};
+
+/**
+ * Reset database configuration to defaults
+ */
+export const resetDbConfig = () => {
+  localStorage.removeItem('db_server');
+  localStorage.removeItem('db_database');
+  localStorage.removeItem('db_username');
+  localStorage.removeItem('db_password');
+  localStorage.removeItem('db_port');
+  
+  // Return the new default config
+  return {
+    server: 'localhost',
+    database: 'SensorDB',
+    user: 'sa',
+    password: '',
+    port: 1433
+  };
+};
+
+/**
+ * Get the current database configuration
+ */
+export const getCurrentDbConfig = () => {
+  return {
+    server: dbConfig.server,
+    database: dbConfig.database,
+    user: dbConfig.user,
+    password: dbConfig.password,
+    port: dbConfig.port
+  };
 };
