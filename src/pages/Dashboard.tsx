@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,13 +13,14 @@ import ConnectedScatterChart from '@/components/charts/ConnectedScatterChart';
 import { getDeviceReadings, getDevicesWithLatestReadings } from '@/services/mockData';
 import { cn } from '@/lib/utils';
 import { DateRange, Device, SensorReading } from '@/types';
+import { DateRange as DayPickerDateRange } from 'react-day-picker';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [devices, setDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = useState<DayPickerDateRange | undefined>();
   const [temperature, setTemperature] = useState<SensorReading[]>([]);
   const [humidity, setHumidity] = useState<SensorReading[]>([]);
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
@@ -35,8 +35,8 @@ const Dashboard = () => {
   useEffect(() => {
     if (activeTab === 'daily') {
       fetchDailyData(selectedDate);
-    } else if (activeTab === 'range' && dateRange?.start && dateRange?.end) {
-      fetchRangeData(dateRange.start, dateRange.end);
+    } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+      fetchRangeData(dateRange.from, dateRange.to);
     }
   }, [selectedDate, dateRange, activeTab]);
 
@@ -234,14 +234,14 @@ const Dashboard = () => {
                         className="justify-start text-left font-normal w-[280px]"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.start ? (
-                          dateRange.end ? (
+                        {dateRange?.from ? (
+                          dateRange.to ? (
                             <>
-                              {format(dateRange.start, "PPP")} -{" "}
-                              {format(dateRange.end, "PPP")}
+                              {format(dateRange.from, "PPP")} -{" "}
+                              {format(dateRange.to, "PPP")}
                             </>
                           ) : (
-                            format(dateRange.start, "PPP")
+                            format(dateRange.from, "PPP")
                           )
                         ) : (
                           <span>Pick a date range</span>
@@ -252,7 +252,6 @@ const Dashboard = () => {
                       <Calendar
                         initialFocus
                         mode="range"
-                        defaultMonth={dateRange?.start}
                         selected={dateRange}
                         onSelect={setDateRange}
                         numberOfMonths={2}

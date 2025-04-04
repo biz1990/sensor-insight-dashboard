@@ -11,11 +11,12 @@ import { mockDevices, getDeviceReadings } from '@/services/mockData';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { DateRange, Device } from '@/types';
+import { DateRange as DayPickerDateRange } from 'react-day-picker';
 
 const ExportData = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = useState<DayPickerDateRange | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -37,7 +38,7 @@ const ExportData = () => {
 
   const handleExport = async () => {
     try {
-      if (!dateRange?.start || !dateRange?.end) {
+      if (!dateRange?.from || !dateRange?.to) {
         toast({
           title: "Date range required",
           description: "Please select a date range for export.",
@@ -50,7 +51,7 @@ const ExportData = () => {
       // For demo, we'll use mock data
       
       // Calculate days difference
-      const diffTime = Math.abs(dateRange.end.getTime() - dateRange.start.getTime());
+      const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
       let exportData = [];
@@ -164,14 +165,14 @@ const ExportData = () => {
                       className="justify-start text-left font-normal w-full md:w-[300px]"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.start ? (
-                        dateRange.end ? (
+                      {dateRange?.from ? (
+                        dateRange.to ? (
                           <>
-                            {format(dateRange.start, "PPP")} -{" "}
-                            {format(dateRange.end, "PPP")}
+                            {format(dateRange.from, "PPP")} -{" "}
+                            {format(dateRange.to, "PPP")}
                           </>
                         ) : (
-                          format(dateRange.start, "PPP")
+                          format(dateRange.from, "PPP")
                         )
                       ) : (
                         <span>Pick a date range</span>
@@ -182,7 +183,6 @@ const ExportData = () => {
                     <Calendar
                       initialFocus
                       mode="range"
-                      defaultMonth={dateRange?.start}
                       selected={dateRange}
                       onSelect={setDateRange}
                       numberOfMonths={2}
@@ -194,7 +194,7 @@ const ExportData = () => {
             
             <Button 
               onClick={handleExport} 
-              disabled={!dateRange || !dateRange.start || !dateRange.end}
+              disabled={!dateRange || !dateRange.from || !dateRange.to}
               className="gap-2"
             >
               <Download className="h-4 w-4" />

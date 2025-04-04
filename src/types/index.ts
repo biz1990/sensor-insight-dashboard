@@ -48,6 +48,6 @@ export interface WarningThreshold {
 }
 
 export interface DateRange {
-  start: Date;
-  end: Date;
+  from: Date;
+  to: Date;
 }

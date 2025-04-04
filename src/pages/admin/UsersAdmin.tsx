@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { Edit, Trash, UserPlus } from 'lucide-react';
 import { mockUsers } from '@/services/mockData';

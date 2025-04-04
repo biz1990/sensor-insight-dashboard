@@ -13,6 +13,7 @@ import DeviceColumnChart from '@/components/charts/DeviceColumnChart';
 import { getDeviceReadings, getDeviceWithLocation } from '@/services/mockData';
 import { cn } from '@/lib/utils';
 import { DateRange, Device, SensorReading } from '@/types';
+import { DateRange as DayPickerDateRange } from 'react-day-picker';
 
 const DeviceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -21,7 +22,7 @@ const DeviceDetail = () => {
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = useState<DayPickerDateRange | undefined>();
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
 
   useEffect(() => {
@@ -34,8 +35,8 @@ const DeviceDetail = () => {
     if (device?.id) {
       if (activeTab === 'daily') {
         fetchDailyData(device.id, selectedDate);
-      } else if (activeTab === 'range' && dateRange?.start && dateRange?.end) {
-        fetchRangeData(device.id, dateRange.start, dateRange.end);
+      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+        fetchRangeData(device.id, dateRange.from, dateRange.to);
       }
     }
   }, [device, selectedDate, dateRange, activeTab]);
@@ -173,7 +174,7 @@ const DeviceDetail = () => {
             <Download className="h-4 w-4" />
             Export Data
           </Button>
-          <Button onClick={handleRefresh} className="gap-2">
+          <Button onClick={() => fetchDevice(device.id)} className="gap-2">
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
@@ -287,14 +288,14 @@ const DeviceDetail = () => {
                         className="justify-start text-left font-normal w-[280px]"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.start ? (
-                          dateRange.end ? (
+                        {dateRange?.from ? (
+                          dateRange.to ? (
                             <>
-                              {format(dateRange.start, "PPP")} -{" "}
-                              {format(dateRange.end, "PPP")}
+                              {format(dateRange.from, "PPP")} -{" "}
+                              {format(dateRange.to, "PPP")}
                             </>
                           ) : (
-                            format(dateRange.start, "PPP")
+                            format(dateRange.from, "PPP")
                           )
                         ) : (
                           <span>Pick a date range</span>
@@ -305,7 +306,6 @@ const DeviceDetail = () => {
                       <Calendar
                         initialFocus
                         mode="range"
-                        defaultMonth={dateRange?.start}
                         selected={dateRange}
                         onSelect={setDateRange}
                         numberOfMonths={2}
