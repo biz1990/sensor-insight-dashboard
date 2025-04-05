@@ -1,6 +1,5 @@
-
 import { getDbConfig } from '@/utils/dbConfig';
-import { mockLocations, mockDevices, mockUsers, mockWarningThreshold, generateReadings, getDevicesWithLatestReadings } from '@/services/mockData';
+import { mockLocations, mockDevices, mockUsers, mockWarningThreshold, generateReadings, getDevicesWithLatestReadings as getMockDevicesWithLatestReadings } from '@/services/mockData';
 import { DeviceLocation, Device, User, WarningThreshold, SensorReading } from '@/types';
 
 // This is the proxy API endpoint that would handle database operations in a real environment
@@ -188,7 +187,7 @@ export const getDevicesWithLatestReadings = async (): Promise<Device[]> => {
   } catch (error) {
     console.error('Error fetching devices with readings:', error);
     // Fall back to mock data
-    return getDevicesWithLatestReadings();
+    return getMockDevicesWithLatestReadings();
   }
 };
 
