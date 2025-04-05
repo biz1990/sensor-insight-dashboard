@@ -2,10 +2,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { testConnection } from '@/services/databaseService';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 
 const TestConnectionButton = () => {
   const [testing, setTesting] = useState(false);
+  const { toast } = useToast();
   
   const handleTestConnection = async () => {
     setTesting(true);
@@ -14,14 +16,14 @@ const TestConnectionButton = () => {
       
       if (result.success) {
         toast({
-          title: 'Connection Simulation Successful',
-          description: 'Connection settings saved. In a production environment, these settings would be used to connect to your database through a secure backend.',
+          title: 'Connection Successful',
+          description: result.message,
           variant: 'default',
         });
       } else {
         toast({
-          title: 'Connection Simulation Failed',
-          description: result.message || 'Connection simulation failed. Please check your settings.',
+          title: 'Connection Failed',
+          description: result.message || 'Connection failed. Please check your settings.',
           variant: 'destructive',
         });
       }
@@ -42,8 +44,9 @@ const TestConnectionButton = () => {
       variant="outline" 
       onClick={handleTestConnection} 
       disabled={testing}
+      className="gap-2"
     >
-      {testing ? 'Testing...' : 'Test Connection'}
+      {testing ? <><Loader2 className="h-4 w-4 animate-spin" /> Testing...</> : 'Test Connection'}
     </Button>
   );
 };
