@@ -24,6 +24,9 @@ const sqlConfig = {
   options: {
     encrypt: process.env.DB_ENCRYPT === 'true',
     trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+    instanceName: process.env.DB_INSTANCE_NAME || undefined,
+    connectTimeout: 30000, // Increased connection timeout
+    requestTimeout: 30000   // Increased request timeout
   },
   pool: {
     max: 10,
@@ -31,6 +34,35 @@ const sqlConfig = {
     idleTimeoutMillis: 30000
   }
 };
+
+// Test database connection on server start
+(async function testInitialConnection() {
+  try {
+    console.log('Attempting initial database connection...');
+    console.log('Connection config:', {
+      server: sqlConfig.server,
+      database: sqlConfig.database,
+      user: sqlConfig.user,
+      port: sqlConfig.port,
+      options: sqlConfig.options
+    });
+    const pool = new sql.ConnectionPool(sqlConfig);
+    await pool.connect();
+    console.log('Initial database connection successful!');
+    await pool.close();
+  } catch (error) {
+    console.error('Initial database connection failed:', error.message);
+    if (error.originalError) {
+      console.error('Original error:', error.originalError.message);
+    }
+    console.error('Please check your SQL Server configuration and make sure:');
+    console.error('1. SQL Server is running and accessible');
+    console.error('2. TCP/IP protocol is enabled in SQL Server Configuration Manager');
+    console.error('3. SQL Server Browser service is running');
+    console.error('4. Firewall allows connections to port 1433');
+    console.error('5. SQL Server authentication is enabled and credentials are correct');
+  }
+})();
 
 // Test database connection
 app.post('/api/test-connection', async (req, res) => {
@@ -45,19 +77,29 @@ app.post('/api/test-connection', async (req, res) => {
     }
     
     // Create a new connection with the provided config
-    const testPool = new sql.ConnectionPool({
+    const testConfig = {
       user: config.user,
       password: config.password,
       server: config.server,
       database: config.database,
       port: config.port || 1433,
-      options: config.options || {
-        encrypt: false,
-        trustServerCertificate: true,
+      options: {
+        ...config.options,
+        connectTimeout: 15000, // 15 seconds timeout for connection test
+        instanceName: config.instanceName || undefined
       }
+    };
+    
+    console.log('Testing connection with config:', {
+      server: testConfig.server,
+      database: testConfig.database,
+      user: testConfig.user,
+      port: testConfig.port,
+      options: testConfig.options
     });
     
     // Try to connect
+    const testPool = new sql.ConnectionPool(testConfig);
     await testPool.connect();
     await testPool.close();
     
@@ -67,9 +109,13 @@ app.post('/api/test-connection', async (req, res) => {
     });
   } catch (error) {
     console.error('Database connection error:', error);
+    let errorMessage = error.message;
+    if (error.originalError) {
+      errorMessage += ' - ' + error.originalError.message;
+    }
     res.status(500).json({ 
       success: false, 
-      message: `Connection failed: ${error.message}`
+      message: `Connection failed: ${errorMessage}`
     });
   }
 });
@@ -119,9 +165,13 @@ app.post('/api/execute-query', async (req, res) => {
     }
   } catch (error) {
     console.error('Query execution error:', error);
+    let errorMessage = error.message;
+    if (error.originalError) {
+      errorMessage += ' - ' + error.originalError.message;
+    }
     res.status(500).json({ 
       success: false, 
-      message: `Query execution failed: ${error.message}`
+      message: `Query execution failed: ${errorMessage}`
     });
   }
 });
@@ -158,9 +208,13 @@ app.delete('/api/devices/:id', async (req, res) => {
     
   } catch (error) {
     console.error('Error deleting device:', error);
+    let errorMessage = error.message;
+    if (error.originalError) {
+      errorMessage += ' - ' + error.originalError.message;
+    }
     res.status(500).json({
       success: false,
-      message: `Failed to delete device: ${error.message}`
+      message: `Failed to delete device: ${errorMessage}`
     });
   }
 });
