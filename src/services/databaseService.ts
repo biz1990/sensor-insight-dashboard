@@ -1,3 +1,4 @@
+
 import { getDbConfig } from '@/utils/dbConfig';
 import { mockLocations, mockDevices, mockUsers, mockWarningThreshold, generateReadings, getDevicesWithLatestReadings as getMockDevicesWithLatestReadings } from '@/services/mockData';
 import { DeviceLocation, Device, User, WarningThreshold, SensorReading } from '@/types';
@@ -232,30 +233,32 @@ export const getUsers = async (): Promise<User[]> => {
  */
 export const deleteDevice = async (deviceId: number): Promise<{ success: boolean; message: string }> => {
   try {
-    // Try to delete from the actual database
+    // Try to delete from the actual database through the API server
     try {
-      const config = getDbConfig();
-      const response = await fetch(`${DB_API_URL}/execute-query`, {
-        method: 'POST',
+      const response = await fetch(`${DB_API_URL}/devices/${deviceId}`, {
+        method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
-          config, 
-          query: 'DELETE FROM Devices WHERE id = @deviceId',
-          params: [deviceId]
-        }),
         signal: AbortSignal.timeout(5000)
       });
+      
+      const result = await response.json();
       
       if (response.ok) {
         return { 
           success: true, 
-          message: 'Device successfully deleted.' 
+          message: result.message || 'Device successfully deleted.' 
+        };
+      } else {
+        return {
+          success: false,
+          message: result.message || 'Failed to delete device.'
         };
       }
     } catch (apiError) {
       console.log('API delete operation failed, falling back to mock deletion', apiError);
+      // Continue to mock deletion if API call fails
     }
     
     // If we're using mock data, simulate deletion
