@@ -226,3 +226,57 @@ export const getUsers = async (): Promise<User[]> => {
     return mockUsers;
   }
 };
+
+/**
+ * Delete a device
+ */
+export const deleteDevice = async (deviceId: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    // Try to delete from the actual database
+    try {
+      const config = getDbConfig();
+      const response = await fetch(`${DB_API_URL}/execute-query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          config, 
+          query: 'DELETE FROM Devices WHERE id = @deviceId',
+          params: [deviceId]
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        return { 
+          success: true, 
+          message: 'Device successfully deleted.' 
+        };
+      }
+    } catch (apiError) {
+      console.log('API delete operation failed, falling back to mock deletion', apiError);
+    }
+    
+    // If we're using mock data, simulate deletion
+    if (USE_MOCK_DATA) {
+      console.log(`Mock deletion of device with ID: ${deviceId}`);
+      // In a real implementation, you would remove the device from your mock data
+      return { 
+        success: true, 
+        message: 'Device successfully deleted (simulated).' 
+      };
+    } else {
+      return {
+        success: false,
+        message: 'Failed to delete device. Database API may be unavailable.'
+      };
+    }
+  } catch (error) {
+    console.error('Error deleting device:', error);
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Unknown error during device deletion' 
+    };
+  }
+};

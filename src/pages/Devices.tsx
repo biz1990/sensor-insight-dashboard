@@ -4,14 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { RefreshCw, PlusCircle } from 'lucide-react';
 import DeviceList from '@/components/DeviceList';
-import { getDevicesWithLatestReadings } from '@/services/mockData';
+import { getDevicesWithLatestReadings } from '@/services/databaseService';
 import { Device } from '@/types';
 import AddDeviceDialog from '@/components/AddDeviceDialog';
+import { useToast } from "@/hooks/use-toast";
 
 const Devices = () => {
   const [devices, setDevices] = useState<Device[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchDevices();
@@ -23,11 +25,16 @@ const Devices = () => {
   const fetchDevices = async () => {
     setIsLoading(true);
     try {
-      // In a real application, this would be an API call
-      const fetchedDevices = getDevicesWithLatestReadings();
+      // Now using the real service function that will try DB first, then fallback to mock
+      const fetchedDevices = await getDevicesWithLatestReadings();
       setDevices(fetchedDevices);
     } catch (error) {
       console.error('Error fetching devices:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load devices. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -54,6 +61,11 @@ const Devices = () => {
     
     setDevices([...devices, createdDevice]);
     setIsAddDeviceOpen(false);
+    
+    toast({
+      title: "Device Added",
+      description: `${newDevice.name} has been added successfully.`,
+    });
   };
 
   return (
@@ -90,7 +102,7 @@ const Devices = () => {
           {isLoading ? (
             <div className="text-center py-10">Loading devices...</div>
           ) : (
-            <DeviceList devices={devices} />
+            <DeviceList devices={devices} onDeviceDelete={handleRefresh} />
           )}
         </CardContent>
       </Card>

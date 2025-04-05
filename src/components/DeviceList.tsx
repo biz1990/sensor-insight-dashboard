@@ -8,9 +8,10 @@ import { Search } from 'lucide-react';
 
 interface DeviceListProps {
   devices: Device[];
+  onDeviceDelete?: () => void;
 }
 
-const DeviceList: React.FC<DeviceListProps> = ({ devices }) => {
+const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
@@ -76,7 +77,11 @@ const DeviceList: React.FC<DeviceListProps> = ({ devices }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredDevices.map(device => (
-            <DeviceCard key={device.id} device={device} />
+            <DeviceCard 
+              key={device.id} 
+              device={device} 
+              onDelete={onDeviceDelete}
+            />
           ))}
         </div>
       )}
