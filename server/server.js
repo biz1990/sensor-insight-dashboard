@@ -64,7 +64,41 @@ const sqlConfig = {
   }
 })();
 
-// Test database connection
+// API status endpoint
+app.get('/api', (req, res) => {
+  res.json({ 
+    status: 'online', 
+    message: 'Sensor Monitoring API is running',
+    version: '1.0.0' 
+  });
+});
+
+// Test database connection - GET endpoint
+app.get('/api/test-connection', async (req, res) => {
+  try {
+    // Try to connect using the default config
+    const pool = new sql.ConnectionPool(sqlConfig);
+    await pool.connect();
+    await pool.close();
+    
+    res.json({ 
+      success: true, 
+      message: 'Database connection successful!'
+    });
+  } catch (error) {
+    console.error('Database connection error:', error);
+    let errorMessage = error.message;
+    if (error.originalError) {
+      errorMessage += ' - ' + error.originalError.message;
+    }
+    res.status(500).json({ 
+      success: false, 
+      message: `Connection failed: ${errorMessage}`
+    });
+  }
+});
+
+// Test database connection - POST endpoint (existing)
 app.post('/api/test-connection', async (req, res) => {
   try {
     const config = req.body;
