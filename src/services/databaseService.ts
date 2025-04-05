@@ -4,10 +4,10 @@ import { DeviceLocation, Device, User, WarningThreshold, SensorReading } from '@
 
 // This is the proxy API endpoint that would handle database operations in a real environment
 // For local testing, you would run a local API server at this address
-const DB_API_URL = process.env.REACT_APP_DB_API_URL || 'http://localhost:3001/api';
+const DB_API_URL = import.meta.env.VITE_DB_API_URL || 'http://localhost:3001/api';
 
 // Flag to determine if we should use mock data or try the real API
-const USE_MOCK_DATA = process.env.NODE_ENV === 'development' && !process.env.REACT_APP_USE_REAL_API;
+const USE_MOCK_DATA = import.meta.env.DEV && !import.meta.env.VITE_USE_REAL_API;
 
 /**
  * Test the database connection with current settings
