@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { RefreshCw, PlusCircle } from 'lucide-react';
 import DeviceList from '@/components/DeviceList';
-import { getDevicesWithLatestReadings } from '@/services/databaseService';
+import { getDevicesWithLatestReadings, addDevice } from '@/services/databaseService';
 import { Device } from '@/types';
 import AddDeviceDialog from '@/components/AddDeviceDialog';
 import { useToast } from "@/hooks/use-toast";
@@ -44,28 +44,28 @@ const Devices = () => {
     fetchDevices();
   };
 
-  const handleAddDevice = (newDevice: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => {
-    // In a real app, this would call an API to create the device
-    const deviceId = devices.length > 0 ? Math.max(...devices.map(d => d.id)) + 1 : 1;
-    const now = new Date().toISOString();
-    
-    const createdDevice: Device = {
-      id: deviceId,
-      name: newDevice.name,
-      serialNumber: newDevice.serialNumber,
-      locationId: newDevice.locationId,
-      status: 'offline', // New devices start as offline
-      createdAt: now,
-      updatedAt: now
-    };
-    
-    setDevices([...devices, createdDevice]);
-    setIsAddDeviceOpen(false);
-    
-    toast({
-      title: "Device Added",
-      description: `${newDevice.name} has been added successfully.`,
-    });
+  const handleAddDevice = async (newDevice: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      // Call the API to create the device
+      const createdDevice = await addDevice(newDevice);
+      
+      if (createdDevice) {
+        setDevices([...devices, createdDevice]);
+        setIsAddDeviceOpen(false);
+        
+        toast({
+          title: "Device Added",
+          description: `${newDevice.name} has been added successfully.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error adding device:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add device. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

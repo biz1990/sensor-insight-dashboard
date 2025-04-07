@@ -3,12 +3,41 @@ import { getDbConfig } from '@/utils/dbConfig';
 import { mockLocations, mockDevices, mockUsers, mockWarningThreshold, generateReadings, getDevicesWithLatestReadings as getMockDevicesWithLatestReadings } from '@/services/mockData';
 import { DeviceLocation, Device, User, WarningThreshold, SensorReading } from '@/types';
 
-// This is the proxy API endpoint that would handle database operations in a real environment
-// For local testing, you would run a local API server at this address
+// This is the proxy API endpoint that handles database operations
 const DB_API_URL = import.meta.env.VITE_DB_API_URL || 'http://localhost:3001/api';
 
 // Flag to determine if we should use mock data or try the real API
 const USE_MOCK_DATA = import.meta.env.DEV && !import.meta.env.VITE_USE_REAL_API;
+
+/**
+ * Helper function to handle API requests
+ */
+const fetchApi = async (endpoint, method = 'GET', body = null) => {
+  try {
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(15000) // 15 seconds timeout
+    };
+
+    console.log(`API ${method} request to: ${endpoint}`);
+    const response = await fetch(`${DB_API_URL}${endpoint}`, options);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || `API request failed with status ${response.status}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error(`API error (${endpoint}):`, error);
+    throw error;
+  }
+};
 
 /**
  * Test the database connection with current settings
@@ -19,23 +48,18 @@ export const testConnection = async (): Promise<{ success: boolean; message: str
     
     // Try to connect to the actual database through an API endpoint
     try {
-      const response = await fetch(`${DB_API_URL}/test-connection`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config),
-        // Small timeout to prevent long waiting times
-        signal: AbortSignal.timeout(5000)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        return result;
-      }
+      const result = await fetchApi('/test-connection', 'POST', config);
+      return result;
     } catch (apiError) {
       console.log('API connection test failed, falling back to simulation', apiError);
-      // Continue to simulation if API call fails
+      // If API call fails, try GET endpoint as fallback
+      try {
+        const result = await fetchApi('/test-connection');
+        return result;
+      } catch (getError) {
+        console.log('GET connection test also failed', getError);
+        // Continue to simulation if both POST and GET fail
+      }
     }
     
     // Fallback to simulation mode
@@ -78,19 +102,8 @@ export const executeQuery = async <T>(query: string, params?: any[]): Promise<T[
     
     // Try to execute the query through an API
     try {
-      const response = await fetch(`${DB_API_URL}/execute-query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ config, query, params }),
-        signal: AbortSignal.timeout(5000)
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        return result.data;
-      }
+      const result = await fetchApi('/execute-query', 'POST', { config, query, params });
+      return result.data;
     } catch (apiError) {
       console.log('API query execution failed, falling back to mock data', apiError);
       // Continue to mock data if API call fails
@@ -111,12 +124,25 @@ export const executeQuery = async <T>(query: string, params?: any[]): Promise<T[
  */
 export const getLocations = async (): Promise<DeviceLocation[]> => {
   try {
-    const result = await executeQuery<DeviceLocation>('SELECT * FROM DeviceLocations');
-    if (result && result.length > 0) {
-      return result;
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi('/locations');
+      if (result.success && result.data.length > 0) {
+        return result.data;
+      }
+    }
+    
+    // Try direct query if the API endpoint didn't work
+    try {
+      const result = await executeQuery<DeviceLocation>('SELECT * FROM DeviceLocations');
+      if (result && result.length > 0) {
+        return result;
+      }
+    } catch (queryError) {
+      console.error('Error with direct query:', queryError);
     }
     
     // Fall back to mock data if no results
+    console.log('Falling back to mock location data');
     return mockLocations;
   } catch (error) {
     console.error('Error fetching locations:', error);
@@ -129,15 +155,28 @@ export const getLocations = async (): Promise<DeviceLocation[]> => {
  */
 export const getDevices = async (): Promise<Device[]> => {
   try {
-    const result = await executeQuery<Device>(
-      'SELECT d.*, l.name as locationName FROM Devices d JOIN DeviceLocations l ON d.locationId = l.id'
-    );
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi('/devices');
+      if (result.success && result.data.length > 0) {
+        return result.data;
+      }
+    }
     
-    if (result && result.length > 0) {
-      return result;
+    // Try direct query if the API endpoint didn't work
+    try {
+      const result = await executeQuery<Device>(
+        'SELECT d.*, l.name as locationName FROM Devices d JOIN DeviceLocations l ON d.locationId = l.id'
+      );
+      
+      if (result && result.length > 0) {
+        return result;
+      }
+    } catch (queryError) {
+      console.error('Error with direct query:', queryError);
     }
     
     // Fall back to mock data if no results
+    console.log('Falling back to mock device data');
     return mockDevices;
   } catch (error) {
     console.error('Error fetching devices:', error);
@@ -150,16 +189,29 @@ export const getDevices = async (): Promise<Device[]> => {
  */
 export const getDeviceReadings = async (deviceId: number, hours = 24): Promise<SensorReading[]> => {
   try {
-    const result = await executeQuery<SensorReading>(
-      'SELECT * FROM SensorReadings WHERE deviceId = @deviceId AND timestamp >= DATEADD(hour, -@hours, GETDATE()) ORDER BY timestamp',
-      [deviceId, hours]
-    );
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi(`/devices/${deviceId}/readings?hours=${hours}`);
+      if (result.success && result.data && result.data.length > 0) {
+        return result.data;
+      }
+    }
     
-    if (result && result.length > 0) {
-      return result;
+    // Try direct query if the API endpoint didn't work
+    try {
+      const result = await executeQuery<SensorReading>(
+        'SELECT * FROM SensorReadings WHERE deviceId = @deviceId AND timestamp >= DATEADD(hour, -@hours, GETDATE()) ORDER BY timestamp',
+        [deviceId, hours]
+      );
+      
+      if (result && result.length > 0) {
+        return result;
+      }
+    } catch (queryError) {
+      console.error('Error with direct query:', queryError);
     }
     
     // Fall back to mock data if no results
+    console.log('Falling back to mock reading data');
     return generateReadings(deviceId, hours);
   } catch (error) {
     console.error('Error fetching readings:', error);
@@ -168,23 +220,85 @@ export const getDeviceReadings = async (deviceId: number, hours = 24): Promise<S
 };
 
 /**
+ * Add a new device
+ */
+export const addDevice = async (device: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>): Promise<Device | null> => {
+  try {
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi('/devices', 'POST', device);
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    
+    // Fallback to mock (simulated add)
+    console.log('Simulating device addition with data:', device);
+    const mockId = Math.floor(Math.random() * 10000) + 100;
+    const now = new Date().toISOString();
+    return {
+      id: mockId,
+      createdAt: now,
+      updatedAt: now,
+      ...device
+    };
+  } catch (error) {
+    console.error('Error adding device:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing device
+ */
+export const updateDevice = async (deviceId: number, deviceData: Partial<Device>): Promise<Device | null> => {
+  try {
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi(`/devices/${deviceId}`, 'PUT', deviceData);
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    
+    // Fallback to mock (simulated update)
+    console.log('Simulating device update with data:', deviceData);
+    return { id: deviceId, ...deviceData, updatedAt: new Date().toISOString() } as Device;
+  } catch (error) {
+    console.error('Error updating device:', error);
+    throw error;
+  }
+};
+
+/**
  * Get devices with latest readings
  */
 export const getDevicesWithLatestReadings = async (): Promise<Device[]> => {
   try {
-    // Try to get real data from the database
+    // Try to get all devices first
     const devices = await getDevices();
-    const devicesWithReadings = await Promise.all(
-      devices.map(async (device) => {
-        const readings = await getDeviceReadings(device.id, 1);
-        return {
-          ...device,
-          lastReading: readings[0]
-        };
-      })
-    );
     
-    return devicesWithReadings;
+    if (!USE_MOCK_DATA) {
+      // For each device, get the latest reading
+      const devicesWithReadings = await Promise.all(
+        devices.map(async (device) => {
+          try {
+            const readings = await getDeviceReadings(device.id, 1);
+            return {
+              ...device,
+              lastReading: readings.length > 0 ? readings[0] : undefined
+            };
+          } catch (error) {
+            console.error(`Error getting readings for device ${device.id}:`, error);
+            return device;
+          }
+        })
+      );
+      
+      return devicesWithReadings;
+    }
+    
+    // Fall back to mock data
+    console.log('Using mock data for devices with readings');
+    return getMockDevicesWithLatestReadings();
   } catch (error) {
     console.error('Error fetching devices with readings:', error);
     // Fall back to mock data
@@ -197,16 +311,50 @@ export const getDevicesWithLatestReadings = async (): Promise<Device[]> => {
  */
 export const getWarningThresholds = async (): Promise<WarningThreshold> => {
   try {
-    const result = await executeQuery<WarningThreshold>('SELECT TOP 1 * FROM WarningThresholds ORDER BY updatedAt DESC');
-    if (result && result.length > 0) {
-      return result[0];
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi('/thresholds');
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    
+    // Try direct query if the API endpoint didn't work
+    try {
+      const result = await executeQuery<WarningThreshold>('SELECT TOP 1 * FROM WarningThresholds ORDER BY updatedAt DESC');
+      if (result && result.length > 0) {
+        return result[0];
+      }
+    } catch (queryError) {
+      console.error('Error with direct query:', queryError);
     }
     
     // Fall back to mock data
+    console.log('Using mock threshold data');
     return mockWarningThreshold;
   } catch (error) {
     console.error('Error fetching thresholds:', error);
     return mockWarningThreshold;
+  }
+};
+
+/**
+ * Update warning thresholds
+ */
+export const updateWarningThresholds = async (thresholds: Partial<WarningThreshold>): Promise<WarningThreshold | null> => {
+  try {
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi('/thresholds', 'POST', thresholds);
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    
+    // Fallback to mock (simulated update)
+    console.log('Simulating threshold update with data:', thresholds);
+    return { ...mockWarningThreshold, ...thresholds, updatedAt: new Date().toISOString() };
+  } catch (error) {
+    console.error('Error updating thresholds:', error);
+    throw error;
   }
 };
 
@@ -235,51 +383,55 @@ export const deleteDevice = async (deviceId: number): Promise<{ success: boolean
   try {
     // Try to delete from the actual database through the API server
     try {
-      const response = await fetch(`${DB_API_URL}/devices/${deviceId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        signal: AbortSignal.timeout(5000)
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok) {
-        return { 
-          success: true, 
-          message: result.message || 'Device successfully deleted.' 
-        };
-      } else {
-        return {
-          success: false,
-          message: result.message || 'Failed to delete device.'
-        };
-      }
+      const result = await fetchApi(`/devices/${deviceId}`, 'DELETE');
+      return { 
+        success: true, 
+        message: result.message || 'Device successfully deleted.' 
+      };
     } catch (apiError) {
+      if (!USE_MOCK_DATA) {
+        throw apiError; // Re-throw if we're not using mock data
+      }
       console.log('API delete operation failed, falling back to mock deletion', apiError);
-      // Continue to mock deletion if API call fails
     }
     
     // If we're using mock data, simulate deletion
-    if (USE_MOCK_DATA) {
-      console.log(`Mock deletion of device with ID: ${deviceId}`);
-      // In a real implementation, you would remove the device from your mock data
-      return { 
-        success: true, 
-        message: 'Device successfully deleted (simulated).' 
-      };
-    } else {
-      return {
-        success: false,
-        message: 'Failed to delete device. Database API may be unavailable.'
-      };
-    }
+    console.log(`Mock deletion of device with ID: ${deviceId}`);
+    return { 
+      success: true, 
+      message: 'Device successfully deleted (simulated).' 
+    };
   } catch (error) {
     console.error('Error deleting device:', error);
     return { 
       success: false, 
       message: error instanceof Error ? error.message : 'Unknown error during device deletion' 
     };
+  }
+};
+
+/**
+ * Add a sensor reading
+ */
+export const addSensorReading = async (reading: Omit<SensorReading, 'id' | 'timestamp'>): Promise<SensorReading | null> => {
+  try {
+    if (!USE_MOCK_DATA) {
+      const result = await fetchApi('/readings', 'POST', reading);
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    
+    // Fallback to mock (simulated add)
+    console.log('Simulating reading addition with data:', reading);
+    const mockId = Math.floor(Math.random() * 10000) + 100;
+    return {
+      id: mockId,
+      timestamp: new Date().toISOString(),
+      ...reading
+    };
+  } catch (error) {
+    console.error('Error adding reading:', error);
+    throw error;
   }
 };
