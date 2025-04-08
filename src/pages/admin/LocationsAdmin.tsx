@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Card,
@@ -30,9 +29,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { Edit, MapPin, Trash } from 'lucide-react';
-import { mockLocations } from '@/services/mockData';
 import { DeviceLocation } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { getLocations, addLocation, updateLocation, deleteLocation } from '@/services/databaseService';
 
 const LocationsAdmin = () => {
   const [locations, setLocations] = useState<DeviceLocation[]>([]);
@@ -54,10 +53,15 @@ const LocationsAdmin = () => {
   const fetchLocations = async () => {
     setIsLoading(true);
     try {
-      // In a real application, this would be an API call
-      setLocations(mockLocations);
+      const fetchedLocations = await getLocations();
+      setLocations(fetchedLocations);
     } catch (error) {
       console.error('Error fetching locations:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch locations from database.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -65,26 +69,21 @@ const LocationsAdmin = () => {
 
   const handleAddLocation = async () => {
     try {
-      // In a real application, this would be an API call
-      const newId = Math.max(...locations.map(l => l.id)) + 1;
-      const currentDate = new Date().toISOString();
-      
-      const createdLocation: DeviceLocation = {
-        id: newId,
+      const createdLocation = await addLocation({
         name: newLocation.name,
-        description: newLocation.description,
-        createdAt: currentDate,
-        updatedAt: currentDate,
-      };
-      
-      setLocations([...locations, createdLocation]);
-      setIsAddDialogOpen(false);
-      setNewLocation({ name: '', description: '' });
-      
-      toast({
-        title: "Location created",
-        description: `Location ${createdLocation.name} has been created successfully.`,
+        description: newLocation.description
       });
+      
+      if (createdLocation) {
+        setLocations([...locations, createdLocation]);
+        setIsAddDialogOpen(false);
+        setNewLocation({ name: '', description: '' });
+        
+        toast({
+          title: "Location created",
+          description: `Location ${createdLocation.name} has been created successfully.`,
+        });
+      }
     } catch (error) {
       console.error('Error adding location:', error);
       toast({
@@ -97,21 +96,27 @@ const LocationsAdmin = () => {
 
   const handleEditLocation = async () => {
     try {
-      // In a real application, this would be an API call
       if (!selectedLocation) return;
       
-      const updatedLocations = locations.map(location => 
-        location.id === selectedLocation.id ? { ...selectedLocation, updatedAt: new Date().toISOString() } : location
-      );
-      
-      setLocations(updatedLocations);
-      setIsEditDialogOpen(false);
-      setSelectedLocation(null);
-      
-      toast({
-        title: "Location updated",
-        description: `Location ${selectedLocation.name} has been updated successfully.`,
+      const updatedLocation = await updateLocation(selectedLocation.id, {
+        name: selectedLocation.name,
+        description: selectedLocation.description
       });
+      
+      if (updatedLocation) {
+        const updatedLocations = locations.map(location => 
+          location.id === updatedLocation.id ? updatedLocation : location
+        );
+        
+        setLocations(updatedLocations);
+        setIsEditDialogOpen(false);
+        setSelectedLocation(null);
+        
+        toast({
+          title: "Location updated",
+          description: `Location ${updatedLocation.name} has been updated successfully.`,
+        });
+      }
     } catch (error) {
       console.error('Error updating location:', error);
       toast({
@@ -124,24 +129,27 @@ const LocationsAdmin = () => {
 
   const handleDeleteLocation = async () => {
     try {
-      // In a real application, this would be an API call
       if (!selectedLocation) return;
       
-      const updatedLocations = locations.filter(location => location.id !== selectedLocation.id);
+      const result = await deleteLocation(selectedLocation.id);
       
-      setLocations(updatedLocations);
-      setIsDeleteDialogOpen(false);
-      setSelectedLocation(null);
-      
-      toast({
-        title: "Location deleted",
-        description: `Location ${selectedLocation.name} has been deleted successfully.`,
-      });
+      if (result.success) {
+        const updatedLocations = locations.filter(location => location.id !== selectedLocation.id);
+        
+        setLocations(updatedLocations);
+        setIsDeleteDialogOpen(false);
+        setSelectedLocation(null);
+        
+        toast({
+          title: "Location deleted",
+          description: result.message,
+        });
+      }
     } catch (error) {
       console.error('Error deleting location:', error);
       toast({
         title: "Error",
-        description: "Failed to delete location.",
+        description: "Failed to delete location. It might be in use by devices.",
         variant: "destructive",
       });
     }

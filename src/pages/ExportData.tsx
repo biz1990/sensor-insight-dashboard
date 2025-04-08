@@ -7,11 +7,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { CalendarIcon, Download } from 'lucide-react';
-import { mockDevices, getDeviceReadings } from '@/services/mockData';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { DateRange, Device } from '@/types';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
+import { getDevices, getDeviceReadings } from '@/services/databaseService';
 
 const ExportData = () => {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -27,10 +27,15 @@ const ExportData = () => {
   const fetchDevices = async () => {
     setIsLoading(true);
     try {
-      // In a real application, this would be an API call
-      setDevices(mockDevices);
+      const fetchedDevices = await getDevices();
+      setDevices(fetchedDevices);
     } catch (error) {
       console.error('Error fetching devices:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch devices from database.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -47,9 +52,6 @@ const ExportData = () => {
         return;
       }
       
-      // In a real application, this would call an API to generate the CSV
-      // For demo, we'll use mock data
-      
       // Calculate days difference
       const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -59,25 +61,42 @@ const ExportData = () => {
       if (selectedDevice === 'all') {
         // Export data for all devices
         for (const device of devices) {
-          const readings = getDeviceReadings(device.id, diffDays * 24);
-          exportData.push(...readings.map(reading => ({
-            deviceId: device.id,
-            deviceName: device.name,
-            ...reading,
-          })));
+          try {
+            const readings = await getDeviceReadings(device.id, diffDays * 24);
+            exportData.push(...readings.map(reading => ({
+              deviceId: device.id,
+              deviceName: device.name,
+              ...reading,
+            })));
+          } catch (error) {
+            console.error(`Error fetching readings for device ${device.id}:`, error);
+          }
         }
       } else {
         // Export data for single device
         const deviceId = parseInt(selectedDevice);
         const device = devices.find(d => d.id === deviceId);
         if (device) {
-          const readings = getDeviceReadings(deviceId, diffDays * 24);
-          exportData = readings.map(reading => ({
-            deviceId: device.id,
-            deviceName: device.name,
-            ...reading,
-          }));
+          try {
+            const readings = await getDeviceReadings(deviceId, diffDays * 24);
+            exportData = readings.map(reading => ({
+              deviceId: device.id,
+              deviceName: device.name,
+              ...reading,
+            }));
+          } catch (error) {
+            console.error(`Error fetching readings for device ${deviceId}:`, error);
+          }
         }
+      }
+      
+      if (exportData.length === 0) {
+        toast({
+          title: "No data",
+          description: "No data available for the selected criteria.",
+          variant: "warning",
+        });
+        return;
       }
       
       // Sort by timestamp

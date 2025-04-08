@@ -23,13 +23,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Device, DeviceLocation } from '@/types';
-import { mockLocations } from '@/services/mockData';
 import { useToast } from '@/hooks/use-toast';
+import { getLocations } from '@/services/databaseService';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Device name must be at least 2 characters.' }),
   serialNumber: z.string().min(4, { message: 'Serial number must be at least 4 characters.' }),
   locationId: z.string().min(1, { message: 'Please select a location.' }),
+  status: z.string().min(1, { message: 'Please select a status.' }),
 });
 
 type AddDeviceProps = {
@@ -40,6 +41,7 @@ type AddDeviceProps = {
 
 const AddDeviceDialog: React.FC<AddDeviceProps> = ({ open, onOpenChange, onAdd }) => {
   const [locations, setLocations] = useState<DeviceLocation[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   
   const form = useForm<z.infer<typeof formSchema>>({
@@ -48,13 +50,32 @@ const AddDeviceDialog: React.FC<AddDeviceProps> = ({ open, onOpenChange, onAdd }
       name: '',
       serialNumber: '',
       locationId: '',
+      status: 'offline',
     },
   });
   
   useEffect(() => {
-    // In a real app, this would be an API call
-    setLocations(mockLocations);
-  }, []);
+    if (open) {
+      fetchLocations();
+    }
+  }, [open]);
+  
+  const fetchLocations = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getLocations();
+      setLocations(data);
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load locations from database.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     try {
@@ -62,7 +83,7 @@ const AddDeviceDialog: React.FC<AddDeviceProps> = ({ open, onOpenChange, onAdd }
         name: values.name,
         serialNumber: values.serialNumber,
         locationId: parseInt(values.locationId),
-        status: 'offline'
+        status: values.status as 'online' | 'offline' | 'warning' | 'error'
       });
       
       toast({
@@ -137,14 +158,47 @@ const AddDeviceDialog: React.FC<AddDeviceProps> = ({ open, onOpenChange, onAdd }
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {locations.map(location => (
-                        <SelectItem 
-                          key={location.id} 
-                          value={location.id.toString()}
-                        >
-                          {location.name}
-                        </SelectItem>
-                      ))}
+                      {isLoading ? (
+                        <SelectItem value="loading" disabled>Loading locations...</SelectItem>
+                      ) : locations.length === 0 ? (
+                        <SelectItem value="none" disabled>No locations available</SelectItem>
+                      ) : (
+                        locations.map(location => (
+                          <SelectItem 
+                            key={location.id} 
+                            value={location.id.toString()}
+                          >
+                            {location.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    defaultValue={field.value} 
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select device status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="offline">Offline</SelectItem>
+                      <SelectItem value="warning">Warning</SelectItem>
+                      <SelectItem value="error">Error</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

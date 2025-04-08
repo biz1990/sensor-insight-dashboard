@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,10 +11,11 @@ import { Calendar } from '@/components/ui/calendar';
 import DeviceList from '@/components/DeviceList';
 import DeviceColumnChart from '@/components/charts/DeviceColumnChart';
 import ConnectedScatterChart from '@/components/charts/ConnectedScatterChart';
-import { getDeviceReadings, getDevicesWithLatestReadings } from '@/services/mockData';
 import { cn } from '@/lib/utils';
 import { DateRange, Device, SensorReading } from '@/types';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
+import { getDeviceReadings, getDevicesWithLatestReadings } from '@/services/databaseService';
+import { useToast } from '@/hooks/use-toast';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -24,6 +26,7 @@ const Dashboard = () => {
   const [temperature, setTemperature] = useState<SensorReading[]>([]);
   const [humidity, setHumidity] = useState<SensorReading[]>([]);
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchDevices();
@@ -33,52 +36,65 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'daily') {
-      fetchDailyData(selectedDate);
-    } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
-      fetchRangeData(dateRange.from, dateRange.to);
+    if (devices.length > 0) {
+      if (activeTab === 'daily') {
+        fetchDailyData(selectedDate);
+      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+        fetchRangeData(dateRange.from, dateRange.to);
+      }
     }
-  }, [selectedDate, dateRange, activeTab]);
+  }, [selectedDate, dateRange, activeTab, devices]);
 
   const fetchDevices = async () => {
     setIsLoading(true);
     try {
-      // In a real application, this would be an API call
-      const fetchedDevices = getDevicesWithLatestReadings();
+      const fetchedDevices = await getDevicesWithLatestReadings();
       setDevices(fetchedDevices);
 
-      // Fetch chart data for the selected date
-      if (activeTab === 'daily') {
+      // Fetch chart data for the selected date if we got devices
+      if (fetchedDevices.length > 0 && activeTab === 'daily') {
         fetchDailyData(selectedDate);
       }
     } catch (error) {
       console.error('Error fetching devices:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch devices. Please check your connection.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const fetchDailyData = async (date: Date) => {
-    // In a real application, this would be an API call with the date parameter
     try {
       let allData: SensorReading[] = [];
       
       // Get readings for each device
-      devices.forEach(device => {
-        const deviceReadings = getDeviceReadings(device.id, 24); // Get 24 hours of data
-        allData = [...allData, ...deviceReadings];
-      });
+      for (const device of devices) {
+        try {
+          const deviceReadings = await getDeviceReadings(device.id, 24); // Get 24 hours of data
+          allData = [...allData, ...deviceReadings];
+        } catch (error) {
+          console.error(`Error fetching readings for device ${device.id}:`, error);
+        }
+      }
       
       // Set the data for charts
       setTemperature(allData);
       setHumidity(allData);
     } catch (error) {
       console.error('Error fetching chart data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch readings data.",
+        variant: "destructive",
+      });
     }
   };
 
   const fetchRangeData = async (start: Date, end: Date) => {
-    // In a real application, this would be an API call with date range parameters
     try {
       let allData: SensorReading[] = [];
       
@@ -87,16 +103,25 @@ const Dashboard = () => {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
       // Get readings for each device
-      devices.forEach(device => {
-        const deviceReadings = getDeviceReadings(device.id, diffDays * 24); // Get data for the range
-        allData = [...allData, ...deviceReadings];
-      });
+      for (const device of devices) {
+        try {
+          const deviceReadings = await getDeviceReadings(device.id, diffDays * 24); // Get data for the range
+          allData = [...allData, ...deviceReadings];
+        } catch (error) {
+          console.error(`Error fetching readings for device ${device.id}:`, error);
+        }
+      }
       
       // Set the data for charts
       setTemperature(allData);
       setHumidity(allData);
     } catch (error) {
       console.error('Error fetching chart data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch readings data for the selected range.",
+        variant: "destructive",
+      });
     }
   };
 
