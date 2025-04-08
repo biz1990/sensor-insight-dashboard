@@ -12,13 +12,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { AlertCircle, Save } from 'lucide-react';
-import { mockWarningThreshold } from '@/services/mockData';
 import { WarningThreshold } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { getWarningThresholds, updateWarningThresholds } from '@/services/databaseService';
+import { Loader2 } from 'lucide-react';
 
 const ThresholdsAdmin = () => {
   const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -28,27 +30,37 @@ const ThresholdsAdmin = () => {
   const fetchThresholds = async () => {
     setIsLoading(true);
     try {
-      // In a real application, this would be an API call
-      setThresholds(mockWarningThreshold);
+      const fetchedThresholds = await getWarningThresholds();
+      setThresholds(fetchedThresholds);
     } catch (error) {
       console.error('Error fetching thresholds:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load threshold settings. Using default values.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSaveThresholds = async () => {
+    if (!thresholds) return;
+    
+    setIsSaving(true);
     try {
-      // In a real application, this would be an API call
-      if (!thresholds) return;
-      
-      const updatedThreshold: WarningThreshold = {
-        ...thresholds,
-        updatedAt: new Date().toISOString(),
+      const updatedThreshold: Partial<WarningThreshold> = {
+        minTemperature: thresholds.minTemperature,
+        maxTemperature: thresholds.maxTemperature,
+        minHumidity: thresholds.minHumidity,
+        maxHumidity: thresholds.maxHumidity,
         updatedBy: 1, // Assuming the current user ID
       };
       
-      setThresholds(updatedThreshold);
+      const result = await updateWarningThresholds(updatedThreshold);
+      if (result) {
+        setThresholds(result);
+      }
       
       toast({
         title: "Thresholds updated",
@@ -61,6 +73,8 @@ const ThresholdsAdmin = () => {
         description: "Failed to update warning thresholds.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -104,16 +118,23 @@ const ThresholdsAdmin = () => {
         
         <Button 
           onClick={handleSaveThresholds} 
-          disabled={isLoading || !thresholds}
+          disabled={isLoading || !thresholds || isSaving}
           className="gap-2"
         >
-          <Save className="h-4 w-4" />
+          {isSaving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           Save Changes
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-10">Loading thresholds...</div>
+        <div className="text-center py-10">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p className="mt-2">Loading thresholds...</p>
+        </div>
       ) : thresholds ? (
         <div className="grid gap-6">
           <Card>

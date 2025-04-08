@@ -6,14 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { CalendarIcon, ArrowLeft, RefreshCw, Download } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, RefreshCw, Download, Loader2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import DeviceColumnChart from '@/components/charts/DeviceColumnChart';
-import { getDeviceReadings, getDeviceWithLocation } from '@/services/mockData';
 import { cn } from '@/lib/utils';
 import { DateRange, Device, SensorReading } from '@/types';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
+import { getDeviceReadings, getDevices } from '@/services/databaseService';
+import { useToast } from '@/hooks/use-toast';
 
 const DeviceDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +25,7 @@ const DeviceDetail = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [dateRange, setDateRange] = useState<DayPickerDateRange | undefined>();
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
+  const { toast } = useToast();
 
   useEffect(() => {
     if (id) {
@@ -44,40 +46,62 @@ const DeviceDetail = () => {
   const fetchDevice = async (deviceId: number) => {
     setIsLoading(true);
     try {
-      // In a real application, this would be an API call
-      const fetchedDevice = getDeviceWithLocation(deviceId);
+      // Get all devices and find the one with matching ID
+      const devices = await getDevices();
+      const fetchedDevice = devices.find(d => d.id === deviceId);
+      
       if (fetchedDevice) {
         setDevice(fetchedDevice);
         fetchDailyData(deviceId, selectedDate);
+      } else {
+        toast({
+          title: "Device not found",
+          description: "Could not find the requested device",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error('Error fetching device:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load device information",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const fetchDailyData = async (deviceId: number, date: Date) => {
-    // In a real application, this would be an API call with the date parameter
     try {
-      const deviceReadings = getDeviceReadings(deviceId, 24); // Get 24 hours of data
+      // Get reading from the real API
+      const deviceReadings = await getDeviceReadings(deviceId, 24); // Get 24 hours of data
       setReadings(deviceReadings);
     } catch (error) {
       console.error('Error fetching readings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load sensor readings",
+        variant: "destructive",
+      });
     }
   };
 
   const fetchRangeData = async (deviceId: number, start: Date, end: Date) => {
-    // In a real application, this would be an API call with date range parameters
     try {
       // Calculate days difference
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      const deviceReadings = getDeviceReadings(deviceId, diffDays * 24); // Get data for the range
+      const deviceReadings = await getDeviceReadings(deviceId, diffDays * 24); // Get data for the range
       setReadings(deviceReadings);
     } catch (error) {
       console.error('Error fetching range readings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load sensor readings for the selected date range",
+        variant: "destructive",
+      });
     }
   };
 
@@ -94,16 +118,15 @@ const DeviceDetail = () => {
       case 'offline':
         return <Badge variant="outline" className="text-gray-500">Offline</Badge>;
       case 'warning':
-        return <Badge className="warning-badge">Warning</Badge>;
+        return <Badge variant="default" className="bg-yellow-500">Warning</Badge>;
       case 'error':
-        return <Badge className="danger-badge">Error</Badge>;
+        return <Badge variant="destructive">Error</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
   };
 
   const exportData = () => {
-    // In a real application, this would call an API to generate the CSV
     if (!device || readings.length === 0) return;
 
     // Convert readings to CSV
@@ -131,7 +154,8 @@ const DeviceDetail = () => {
   if (isLoading) {
     return (
       <div className="text-center py-10">
-        Loading device information...
+        <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+        <p className="mt-2">Loading device information...</p>
       </div>
     );
   }
@@ -174,7 +198,7 @@ const DeviceDetail = () => {
             <Download className="h-4 w-4" />
             Export Data
           </Button>
-          <Button onClick={() => fetchDevice(device.id)} className="gap-2">
+          <Button onClick={handleRefresh} className="gap-2">
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
