@@ -1,14 +1,13 @@
 
 import { getDbConfig } from '@/utils/dbConfig';
-import { mockLocations, mockDevices, mockUsers, mockWarningThreshold, generateReadings, getDevicesWithLatestReadings as getMockDevicesWithLatestReadings } from '@/services/mockData';
 import { DeviceLocation, Device, User, WarningThreshold, SensorReading } from '@/types';
 
 // This is the proxy API endpoint that handles database operations
 const DB_API_URL = import.meta.env.VITE_DB_API_URL || 'http://localhost:3001/api';
 
 // Flag to determine if we should use mock data or try the real API
-// Force to false to ensure we always try the real API first
-const USE_MOCK_DATA = false;
+// Set to true to always try the real API first
+const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
 
 /**
  * Helper function to handle API requests
@@ -93,13 +92,11 @@ export const executeQuery = async <T>(query: string, params?: any[]): Promise<T[
 export const getLocations = async (): Promise<DeviceLocation[]> => {
   try {
     const result = await fetchApi('/locations');
-    if (result.success && result.data.length > 0) {
-      return result.data;
-    }
-    throw new Error('No locations found in database');
+    console.log('Locations API result:', result);
+    return result.data;
   } catch (error) {
-    console.error('Error fetching locations from API, falling back to mock data:', error);
-    return mockLocations;
+    console.error('Error fetching locations from API:', error);
+    throw error;
   }
 };
 
@@ -109,13 +106,11 @@ export const getLocations = async (): Promise<DeviceLocation[]> => {
 export const getDevices = async (): Promise<Device[]> => {
   try {
     const result = await fetchApi('/devices');
-    if (result.success && result.data.length > 0) {
-      return result.data;
-    }
-    throw new Error('No devices found in database');
+    console.log('Devices API result:', result);
+    return result.data;
   } catch (error) {
-    console.error('Error fetching devices from API, falling back to mock data:', error);
-    return mockDevices;
+    console.error('Error fetching devices from API:', error);
+    throw error;
   }
 };
 
@@ -125,13 +120,11 @@ export const getDevices = async (): Promise<Device[]> => {
 export const getDeviceReadings = async (deviceId: number, hours = 24): Promise<SensorReading[]> => {
   try {
     const result = await fetchApi(`/devices/${deviceId}/readings?hours=${hours}`);
-    if (result.success && result.data && result.data.length > 0) {
-      return result.data;
-    }
-    throw new Error('No readings found for device');
+    console.log(`Readings for device ${deviceId} API result:`, result);
+    return result.data;
   } catch (error) {
-    console.error('Error fetching readings from API, falling back to mock data:', error);
-    return generateReadings(deviceId, hours);
+    console.error(`Error fetching readings for device ${deviceId} from API:`, error);
+    throw error;
   }
 };
 
@@ -174,33 +167,11 @@ export const getDevicesWithLatestReadings = async (): Promise<Device[]> => {
   try {
     // Try to get all devices with latest readings in one API call
     const result = await fetchApi('/devices/with-readings');
-    if (result.success && result.data && result.data.length > 0) {
-      return result.data;
-    }
-    
-    // Fallback to getting devices and readings separately
-    const devices = await getDevices();
-    
-    // For each device, get the latest reading
-    const devicesWithReadings = await Promise.all(
-      devices.map(async (device) => {
-        try {
-          const readings = await getDeviceReadings(device.id, 1);
-          return {
-            ...device,
-            lastReading: readings.length > 0 ? readings[0] : undefined
-          };
-        } catch (error) {
-          console.error(`Error getting readings for device ${device.id}:`, error);
-          return device;
-        }
-      })
-    );
-    
-    return devicesWithReadings;
+    console.log('Devices with latest readings result:', result);
+    return result.data;
   } catch (error) {
-    console.error('Error fetching devices with readings from API, falling back to mock data:', error);
-    return getMockDevicesWithLatestReadings();
+    console.error('Error fetching devices with readings from API:', error);
+    throw error;
   }
 };
 
@@ -210,13 +181,11 @@ export const getDevicesWithLatestReadings = async (): Promise<Device[]> => {
 export const getWarningThresholds = async (): Promise<WarningThreshold> => {
   try {
     const result = await fetchApi('/thresholds');
-    if (result.success && result.data) {
-      return result.data;
-    }
-    throw new Error('No thresholds found in database');
+    console.log('Thresholds API result:', result);
+    return result.data;
   } catch (error) {
-    console.error('Error fetching thresholds from API, falling back to mock data:', error);
-    return mockWarningThreshold;
+    console.error('Error fetching thresholds from API:', error);
+    throw error;
   }
 };
 
@@ -242,13 +211,11 @@ export const updateWarningThresholds = async (thresholds: Partial<WarningThresho
 export const getUsers = async (): Promise<User[]> => {
   try {
     const result = await fetchApi('/users');
-    if (result.success && result.data) {
-      return result.data;
-    }
-    throw new Error('No users found in database');
+    console.log('Users API result:', result);
+    return result.data;
   } catch (error) {
-    console.error('Error fetching users from API, falling back to mock data:', error);
-    return mockUsers;
+    console.error('Error fetching users from API:', error);
+    throw error;
   }
 };
 
@@ -264,10 +231,7 @@ export const deleteDevice = async (deviceId: number): Promise<{ success: boolean
     };
   } catch (error) {
     console.error('Error deleting device:', error);
-    return { 
-      success: false, 
-      message: error instanceof Error ? error.message : 'Unknown error during device deletion' 
-    };
+    throw error;
   }
 };
 
@@ -287,3 +251,98 @@ export const addSensorReading = async (reading: Omit<SensorReading, 'id' | 'time
   }
 };
 
+/**
+ * Add a new location
+ */
+export const addLocation = async (location: Omit<DeviceLocation, 'id' | 'createdAt' | 'updatedAt'>): Promise<DeviceLocation | null> => {
+  try {
+    const result = await fetchApi('/locations', 'POST', location);
+    if (result.success && result.data) {
+      return result.data;
+    }
+    throw new Error('Failed to add location to database');
+  } catch (error) {
+    console.error('Error adding location:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing location
+ */
+export const updateLocation = async (locationId: number, locationData: Partial<DeviceLocation>): Promise<DeviceLocation | null> => {
+  try {
+    const result = await fetchApi(`/locations/${locationId}`, 'PUT', locationData);
+    if (result.success && result.data) {
+      return result.data;
+    }
+    throw new Error('Failed to update location in database');
+  } catch (error) {
+    console.error('Error updating location:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a location
+ */
+export const deleteLocation = async (locationId: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const result = await fetchApi(`/locations/${locationId}`, 'DELETE');
+    return { 
+      success: true, 
+      message: result.message || 'Location successfully deleted.' 
+    };
+  } catch (error) {
+    console.error('Error deleting location:', error);
+    throw error;
+  }
+};
+
+/**
+ * Add a new user
+ */
+export const addUser = async (user: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<User | null> => {
+  try {
+    const result = await fetchApi('/users', 'POST', user);
+    if (result.success && result.data) {
+      return result.data;
+    }
+    throw new Error('Failed to add user to database');
+  } catch (error) {
+    console.error('Error adding user:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update an existing user
+ */
+export const updateUser = async (userId: number, userData: Partial<User>): Promise<User | null> => {
+  try {
+    const result = await fetchApi(`/users/${userId}`, 'PUT', userData);
+    if (result.success && result.data) {
+      return result.data;
+    }
+    throw new Error('Failed to update user in database');
+  } catch (error) {
+    console.error('Error updating user:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a user
+ */
+export const deleteUser = async (userId: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const result = await fetchApi(`/users/${userId}`, 'DELETE');
+    return { 
+      success: true, 
+      message: result.message || 'User successfully deleted.' 
+    };
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    throw error;
+  }
+};

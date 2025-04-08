@@ -25,4 +25,3 @@ router.delete('/:id', deviceController.deleteDevice);
 router.get('/:id/readings', deviceController.getDeviceReadings);
 
 module.exports = router;
-
