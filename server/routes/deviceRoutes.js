@@ -6,6 +6,9 @@ const deviceController = require('../controllers/deviceController');
 // GET all devices
 router.get('/', deviceController.getAllDevices);
 
+// GET devices with their latest readings
+router.get('/with-readings', deviceController.getDevicesWithLatestReadings);
+
 // GET device by ID
 router.get('/:id', deviceController.getDeviceById);
 
@@ -22,3 +25,4 @@ router.delete('/:id', deviceController.deleteDevice);
 router.get('/:id/readings', deviceController.getDeviceReadings);
 
 module.exports = router;
+

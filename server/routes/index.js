@@ -8,6 +8,7 @@ const locationRoutes = require('./locationRoutes');
 const readingRoutes = require('./readingRoutes');
 const thresholdRoutes = require('./thresholdRoutes');
 const utilRoutes = require('./utilRoutes');
+const userRoutes = require('./userRoutes');
 
 // Root API endpoint
 router.get('/', (req, res) => {
@@ -23,6 +24,8 @@ router.use('/devices', deviceRoutes);
 router.use('/locations', locationRoutes);
 router.use('/readings', readingRoutes);
 router.use('/thresholds', thresholdRoutes);
+router.use('/users', userRoutes);
 router.use('/', utilRoutes); // For utility routes like test-connection
 
 module.exports = router;
+
