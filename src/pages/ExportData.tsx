@@ -29,7 +29,7 @@ const AlertComponent = ({ status }) => {
   
   if (status === 'warning') {
     return (
-      <Alert variant="default" className="mb-4 border-yellow-500 bg-yellow-50 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+      <Alert variant="warning" className="mb-4">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Warning</AlertTitle>
         <AlertDescription>
