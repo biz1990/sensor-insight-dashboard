@@ -43,13 +43,15 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
       name: `Device ${deviceId}`,
       data: readings.map(r => {
         // Handle timestamp properly based on its type
-        let timestamp;
+        let timestamp: number;
+        
         if (typeof r.timestamp === 'string') {
           timestamp = parseISO(r.timestamp).getTime();
         } else if (r.timestamp instanceof Date) {
           timestamp = r.timestamp.getTime();
         } else {
-          timestamp = new Date(r.timestamp).getTime();
+          // Handle when timestamp is a number or other format
+          timestamp = new Date(r.timestamp as any).getTime();
         }
           
         return {

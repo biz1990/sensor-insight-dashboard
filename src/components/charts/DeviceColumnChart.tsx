@@ -23,16 +23,17 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
   // Process data for chart display
   const chartData = data.map(reading => {
     // Handle timestamp based on its type
-    let timestamp;
+    let timestamp: Date;
+    
     if (typeof reading.timestamp === 'string') {
       // Parse ISO string to Date object
       timestamp = parseISO(reading.timestamp);
     } else if (reading.timestamp instanceof Date) {
-      // Handle when timestamp is already a Date object
+      // When timestamp is already a Date object
       timestamp = reading.timestamp;
     } else {
       // Handle when timestamp is a number or other format
-      timestamp = new Date(reading.timestamp);
+      timestamp = new Date(reading.timestamp as any);
     }
     
     return {
