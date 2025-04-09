@@ -13,7 +13,7 @@ import {
   Line,
   ComposedChart,
 } from 'recharts';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { SensorReading } from '@/types';
 
 interface ConnectedScatterChartProps {
@@ -41,13 +41,20 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
     return {
       id: deviceId,
       name: `Device ${deviceId}`,
-      data: readings.map(r => ({
-        x: new Date(r.timestamp).getTime(),
-        y: compareType === 'temperature' ? r.temperature : r.humidity,
-        temperature: r.temperature,
-        humidity: r.humidity,
-        timestamp: r.timestamp,
-      })),
+      data: readings.map(r => {
+        // Ensure we properly parse the timestamp from the database
+        const timestamp = typeof r.timestamp === 'string' 
+          ? parseISO(r.timestamp).getTime()
+          : new Date(r.timestamp).getTime();
+          
+        return {
+          x: timestamp,
+          y: compareType === 'temperature' ? r.temperature : r.humidity,
+          temperature: r.temperature,
+          humidity: r.humidity,
+          timestamp: r.timestamp,
+        };
+      }),
     };
   });
 
@@ -86,9 +93,14 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           content={({ active, payload }) => {
             if (active && payload && payload.length) {
               const data = payload[0].payload;
+              // Format the timestamp for the tooltip
+              const displayTime = typeof data.timestamp === 'string'
+                ? format(parseISO(data.timestamp), 'yyyy-MM-dd HH:mm')
+                : format(new Date(data.timestamp), 'yyyy-MM-dd HH:mm');
+                
               return (
                 <div className="bg-background border rounded p-2 shadow-md">
-                  <p className="text-sm font-medium">{format(new Date(data.timestamp), 'yyyy-MM-dd HH:mm')}</p>
+                  <p className="text-sm font-medium">{displayTime}</p>
                   <p className="text-sm">Device: {payload[0].name}</p>
                   <p className="text-sm text-[#FF6B6B]">Temperature: {data.temperature}°C</p>
                   <p className="text-sm text-[#4ECDC4]">Humidity: {data.humidity}%</p>

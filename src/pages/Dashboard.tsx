@@ -4,17 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, RefreshCw } from 'lucide-react';
-import { format } from 'date-fns';
+import { AlertCircle, CalendarIcon, RefreshCw } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import DeviceList from '@/components/DeviceList';
 import DeviceColumnChart from '@/components/charts/DeviceColumnChart';
 import ConnectedScatterChart from '@/components/charts/ConnectedScatterChart';
 import { cn } from '@/lib/utils';
-import { DateRange, Device, SensorReading } from '@/types';
+import { DateRange, Device, SensorReading, WarningThreshold } from '@/types';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
-import { getDeviceReadings, getDevicesWithLatestReadings } from '@/services/databaseService';
+import { getDeviceReadings, getDevicesWithLatestReadings, getWarningThresholds } from '@/services/databaseService';
 import { useToast } from '@/hooks/use-toast';
 
 const Dashboard = () => {
@@ -27,13 +28,62 @@ const Dashboard = () => {
   const [humidity, setHumidity] = useState<SensorReading[]>([]);
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
   const { toast } = useToast();
+  const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
+  const [warningDevices, setWarningDevices] = useState<Device[]>([]);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   useEffect(() => {
     fetchDevices();
-    const intervalId = setInterval(fetchDevices, 60000); // Refresh every minute
-
+    fetchThresholds();
+    
+    // Set up auto-refresh every 5 minutes (300000ms)
+    const intervalId = setInterval(() => {
+      fetchDevices();
+      fetchThresholds();
+      setLastRefreshed(new Date());
+      
+      if (activeTab === 'daily') {
+        fetchDailyData(selectedDate);
+      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+        fetchRangeData(dateRange.from, dateRange.to);
+      }
+      
+      toast({
+        title: "Data auto-refreshed",
+        description: "Dashboard data has been automatically updated.",
+      });
+    }, 300000); // 5 minutes
+    
     return () => clearInterval(intervalId);
   }, []);
+
+  // Monitor devices for warnings based on thresholds
+  useEffect(() => {
+    if (thresholds && devices.length > 0) {
+      const devicesWithWarnings = devices.filter(device => {
+        if (!device.lastReading) return false;
+        
+        const { temperature, humidity } = device.lastReading;
+        return (
+          temperature < thresholds.minTemperature ||
+          temperature > thresholds.maxTemperature ||
+          humidity < thresholds.minHumidity ||
+          humidity > thresholds.maxHumidity
+        );
+      });
+      
+      setWarningDevices(devicesWithWarnings);
+      
+      // Update device status based on thresholds
+      if (devicesWithWarnings.length > 0) {
+        toast({
+          title: "Warning",
+          description: `${devicesWithWarnings.length} devices have readings outside threshold limits.`,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [thresholds, devices]);
 
   useEffect(() => {
     if (devices.length > 0) {
@@ -44,6 +94,15 @@ const Dashboard = () => {
       }
     }
   }, [selectedDate, dateRange, activeTab, devices]);
+
+  const fetchThresholds = async () => {
+    try {
+      const fetchedThresholds = await getWarningThresholds();
+      setThresholds(fetchedThresholds);
+    } catch (error) {
+      console.error('Error fetching thresholds:', error);
+    }
+  };
 
   const fetchDevices = async () => {
     setIsLoading(true);
@@ -127,6 +186,19 @@ const Dashboard = () => {
 
   const handleRefresh = () => {
     fetchDevices();
+    fetchThresholds();
+    setLastRefreshed(new Date());
+    
+    if (activeTab === 'daily') {
+      fetchDailyData(selectedDate);
+    } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+      fetchRangeData(dateRange.from, dateRange.to);
+    }
+    
+    toast({
+      title: "Data refreshed",
+      description: "Dashboard data has been manually updated.",
+    });
   };
 
   return (
@@ -138,12 +210,47 @@ const Dashboard = () => {
           <p className="text-muted-foreground">
             Monitor your sensors and environment data
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Last updated: {format(lastRefreshed, "yyyy-MM-dd HH:mm:ss")}
+          </p>
         </div>
         <Button onClick={handleRefresh} className="gap-2">
           <RefreshCw className="h-4 w-4" />
           Refresh
         </Button>
       </div>
+
+      {/* Warning Section */}
+      {warningDevices.length > 0 && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Devices with Warnings</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">The following devices have readings outside the threshold limits:</p>
+            <ul className="list-disc pl-5">
+              {warningDevices.map(device => (
+                <li key={device.id} className="mb-1">
+                  <strong>{device.name}</strong>: {device.lastReading && (
+                    <>
+                      {device.lastReading.temperature}°C / {device.lastReading.humidity}%
+                      {device.lastReading.timestamp && (
+                        <span className="text-xs ml-2">
+                          ({format(
+                            typeof device.lastReading.timestamp === 'string' 
+                              ? parseISO(device.lastReading.timestamp) 
+                              : new Date(device.lastReading.timestamp),
+                            "yyyy-MM-dd HH:mm:ss"
+                          )})
+                        </span>
+                      )}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">

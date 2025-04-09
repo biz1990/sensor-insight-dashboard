@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { SensorReading } from '@/types';
 
 interface DeviceColumnChartProps {
@@ -20,12 +20,19 @@ interface DeviceColumnChartProps {
 }
 
 const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 300 }) => {
-  const chartData = data.map(reading => ({
-    timestamp: format(new Date(reading.timestamp), 'HH:mm'),
-    temperature: reading.temperature,
-    humidity: reading.humidity,
-    originalTimestamp: reading.timestamp,
-  }));
+  const chartData = data.map(reading => {
+    // Ensure we properly parse the timestamp from the database
+    const timestamp = typeof reading.timestamp === 'string' 
+      ? parseISO(reading.timestamp)
+      : new Date(reading.timestamp);
+    
+    return {
+      timestamp: format(timestamp, 'HH:mm'),
+      temperature: reading.temperature,
+      humidity: reading.humidity,
+      originalTimestamp: reading.timestamp,
+    };
+  });
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -56,9 +63,14 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
           content={({ active, payload }) => {
             if (active && payload && payload.length) {
               const data = payload[0].payload;
+              // Format the timestamp for the tooltip
+              const displayTime = typeof data.originalTimestamp === 'string'
+                ? format(parseISO(data.originalTimestamp), 'yyyy-MM-dd HH:mm')
+                : format(new Date(data.originalTimestamp), 'yyyy-MM-dd HH:mm');
+                
               return (
                 <div className="bg-background border rounded p-2 shadow-md">
-                  <p className="text-sm font-medium">{format(new Date(data.originalTimestamp), 'yyyy-MM-dd HH:mm')}</p>
+                  <p className="text-sm font-medium">{displayTime}</p>
                   <p className="text-sm text-[#FF6B6B]">Temperature: {data.temperature}°C</p>
                   <p className="text-sm text-[#4ECDC4]">Humidity: {data.humidity}%</p>
                 </div>

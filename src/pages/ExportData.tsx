@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +11,35 @@ import { useToast } from '@/hooks/use-toast';
 import { DateRange, Device } from '@/types';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
 import { getDevices, getDeviceReadings } from '@/services/databaseService';
+import { Alert, AlertCircle, AlertTitle, AlertDescription } from '@/components/ui/alert';
+
+const AlertComponent = ({ status }) => {
+  if (status === 'error') {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>
+          An error occurred while fetching the data. Please try again.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  
+  if (status === 'warning') {
+    return (
+      <Alert variant="default" className="mb-4 border-yellow-500 bg-yellow-50 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Warning</AlertTitle>
+        <AlertDescription>
+          Some devices may have incomplete data in the selected range.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  
+  return null;
+};
 
 const ExportData = () => {
   const [devices, setDevices] = useState<Device[]>([]);

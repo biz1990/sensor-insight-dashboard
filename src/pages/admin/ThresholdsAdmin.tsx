@@ -11,10 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Save } from 'lucide-react';
-import { WarningThreshold } from '@/types';
+import { WarningThreshold, Device } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { getWarningThresholds, updateWarningThresholds } from '@/services/databaseService';
+import { getWarningThresholds, updateWarningThresholds, getDevicesWithLatestReadings } from '@/services/databaseService';
 import { Loader2 } from 'lucide-react';
 
 const ThresholdsAdmin = () => {
@@ -22,10 +23,54 @@ const ThresholdsAdmin = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const [warningDevices, setWarningDevices] = useState<Device[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
 
   useEffect(() => {
     fetchThresholds();
+    fetchDevices();
+    
+    // Set up auto-refresh every 5 minutes (300000ms)
+    const intervalId = setInterval(() => {
+      fetchThresholds();
+      fetchDevices();
+    }, 300000);
+    
+    return () => clearInterval(intervalId);
   }, []);
+
+  // Monitor devices for warnings based on thresholds
+  useEffect(() => {
+    if (thresholds && devices.length > 0) {
+      const devicesWithWarnings = devices.filter(device => {
+        if (!device.lastReading) return false;
+        
+        const { temperature, humidity } = device.lastReading;
+        return (
+          temperature < thresholds.minTemperature ||
+          temperature > thresholds.maxTemperature ||
+          humidity < thresholds.minHumidity ||
+          humidity > thresholds.maxHumidity
+        );
+      });
+      
+      setWarningDevices(devicesWithWarnings);
+    }
+  }, [thresholds, devices]);
+
+  const fetchDevices = async () => {
+    try {
+      const fetchedDevices = await getDevicesWithLatestReadings();
+      setDevices(fetchedDevices);
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch device data.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchThresholds = async () => {
     setIsLoading(true);
@@ -66,6 +111,9 @@ const ThresholdsAdmin = () => {
         title: "Thresholds updated",
         description: "Warning thresholds have been updated successfully.",
       });
+      
+      // Refresh devices to update warning statuses
+      fetchDevices();
     } catch (error) {
       console.error('Error updating thresholds:', error);
       toast({
@@ -106,6 +154,15 @@ const ThresholdsAdmin = () => {
     });
   };
 
+  const handleRefresh = () => {
+    fetchThresholds();
+    fetchDevices();
+    toast({
+      title: "Data refreshed",
+      description: "The latest threshold and device data has been loaded.",
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -115,6 +172,15 @@ const ThresholdsAdmin = () => {
             Set warning thresholds for temperature and humidity
           </p>
         </div>
+        
+        <Button 
+          onClick={handleRefresh}
+          className="gap-2 mr-2"
+          variant="outline"
+        >
+          <Loader2 className="h-4 w-4" />
+          Refresh Data
+        </Button>
         
         <Button 
           onClick={handleSaveThresholds} 
@@ -129,6 +195,33 @@ const ThresholdsAdmin = () => {
           Save Changes
         </Button>
       </div>
+
+      {/* Warning Devices Section */}
+      {warningDevices.length > 0 && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Devices with Warnings</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">The following devices have readings outside the threshold limits:</p>
+            <ul className="list-disc pl-5">
+              {warningDevices.map(device => (
+                <li key={device.id} className="mb-1">
+                  <strong>{device.name}</strong>: {device.lastReading && (
+                    <>
+                      {device.lastReading.temperature}°C / {device.lastReading.humidity}%
+                      {device.lastReading.timestamp && (
+                        <span className="text-xs ml-2">
+                          ({new Date(device.lastReading.timestamp).toLocaleString()})
+                        </span>
+                      )}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isLoading ? (
         <div className="text-center py-10">
