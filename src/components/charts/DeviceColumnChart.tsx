@@ -27,11 +27,17 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
       : new Date(reading.timestamp);
     
     return {
-      timestamp: format(timestamp, 'HH:mm'),
+      timestamp: format(timestamp, 'yyyy-MM-dd HH:mm'),
+      displayTime: format(timestamp, 'HH:mm'),
       temperature: reading.temperature,
       humidity: reading.humidity,
       originalTimestamp: reading.timestamp,
     };
+  }).sort((a, b) => {
+    // Sort by timestamp to ensure chronological order
+    const dateA = new Date(a.timestamp);
+    const dateB = new Date(b.timestamp);
+    return dateA.getTime() - dateB.getTime();
   });
 
   return (
@@ -42,7 +48,7 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
       >
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis
-          dataKey="timestamp"
+          dataKey="displayTime"
           tick={{ fontSize: 12 }}
         />
         <YAxis
@@ -63,14 +69,10 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
           content={({ active, payload }) => {
             if (active && payload && payload.length) {
               const data = payload[0].payload;
-              // Format the timestamp for the tooltip
-              const displayTime = typeof data.originalTimestamp === 'string'
-                ? format(parseISO(data.originalTimestamp), 'yyyy-MM-dd HH:mm')
-                : format(new Date(data.originalTimestamp), 'yyyy-MM-dd HH:mm');
                 
               return (
                 <div className="bg-background border rounded p-2 shadow-md">
-                  <p className="text-sm font-medium">{displayTime}</p>
+                  <p className="text-sm font-medium">{data.timestamp}</p>
                   <p className="text-sm text-[#FF6B6B]">Temperature: {data.temperature}°C</p>
                   <p className="text-sm text-[#4ECDC4]">Humidity: {data.humidity}%</p>
                 </div>

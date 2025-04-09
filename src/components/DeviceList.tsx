@@ -1,90 +1,45 @@
 
-import React, { useState } from 'react';
-import { Device } from '@/types';
+import React, { useState, useEffect } from 'react';
 import DeviceCard from './DeviceCard';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search } from 'lucide-react';
+import { Device, WarningThreshold } from '@/types';
+import { getWarningThresholds } from '@/services/databaseService';
 
 interface DeviceListProps {
   devices: Device[];
-  onDeviceDelete?: () => void;
+  onDeviceDeleted?: () => void;
 }
 
-const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDelete }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [locationFilter, setLocationFilter] = useState('all');
+const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted }) => {
+  const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
   
-  const locations = [...new Set(devices.map(device => device.location?.name || 'Unknown'))];
+  useEffect(() => {
+    fetchThresholds();
+  }, []);
   
-  const filteredDevices = devices.filter(device => {
-    const matchesSearch = device.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || device.status === statusFilter;
-    const matchesLocation = locationFilter === 'all' || 
-                           (device.location?.name || 'Unknown') === locationFilter;
-                           
-    return matchesSearch && matchesStatus && matchesLocation;
-  });
+  const fetchThresholds = async () => {
+    try {
+      const thresholdsData = await getWarningThresholds();
+      setThresholds(thresholdsData);
+    } catch (error) {
+      console.error('Error fetching thresholds:', error);
+    }
+  };
   
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row">
-        <div className="relative flex-grow">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search devices..."
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <div className="flex gap-4">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="offline">Offline</SelectItem>
-              <SelectItem value="warning">Warning</SelectItem>
-              <SelectItem value="error">Error</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Select value={locationFilter} onValueChange={setLocationFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Location" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Locations</SelectItem>
-              {locations.map(location => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      
-      {filteredDevices.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">
-          No devices found matching your filters
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDevices.map(device => (
-            <DeviceCard 
-              key={device.id} 
-              device={device} 
-              onDelete={onDeviceDelete}
-            />
-          ))}
-        </div>
-      )}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {devices.map(device => (
+        <DeviceCard
+          key={device.id}
+          device={device}
+          onDelete={onDeviceDeleted}
+          thresholds={thresholds ? {
+            minTemperature: thresholds.minTemperature,
+            maxTemperature: thresholds.maxTemperature,
+            minHumidity: thresholds.minHumidity,
+            maxHumidity: thresholds.maxHumidity
+          } : undefined}
+        />
+      ))}
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,14 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import { CalendarIcon, ArrowLeft, RefreshCw, Download, Loader2 } from 'lucide-react';
+import { CalendarIcon, ArrowLeft, RefreshCw, Download, Loader2, AlertTriangle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import DeviceColumnChart from '@/components/charts/DeviceColumnChart';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
-import { DateRange, Device, SensorReading } from '@/types';
+import { DateRange, Device, SensorReading, WarningThreshold } from '@/types';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
-import { getDeviceReadings, getDevices } from '@/services/databaseService';
+import { getDeviceReadings, getDevices, getWarningThresholds } from '@/services/databaseService';
 import { useToast } from '@/hooks/use-toast';
 
 const DeviceDetail = () => {
@@ -26,10 +26,12 @@ const DeviceDetail = () => {
   const [dateRange, setDateRange] = useState<DayPickerDateRange | undefined>();
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
   const { toast } = useToast();
+  const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
 
   useEffect(() => {
     if (id) {
       fetchDevice(parseInt(id));
+      fetchThresholds();
     }
   }, [id]);
 
@@ -43,10 +45,18 @@ const DeviceDetail = () => {
     }
   }, [device, selectedDate, dateRange, activeTab]);
 
+  const fetchThresholds = async () => {
+    try {
+      const thresholdsData = await getWarningThresholds();
+      setThresholds(thresholdsData);
+    } catch (error) {
+      console.error('Error fetching thresholds:', error);
+    }
+  };
+
   const fetchDevice = async (deviceId: number) => {
     setIsLoading(true);
     try {
-      // Get all devices and find the one with matching ID
       const devices = await getDevices();
       const fetchedDevice = devices.find(d => d.id === deviceId);
       
@@ -74,8 +84,7 @@ const DeviceDetail = () => {
 
   const fetchDailyData = async (deviceId: number, date: Date) => {
     try {
-      // Get reading from the real API
-      const deviceReadings = await getDeviceReadings(deviceId, 24); // Get 24 hours of data
+      const deviceReadings = await getDeviceReadings(deviceId, 24);
       setReadings(deviceReadings);
     } catch (error) {
       console.error('Error fetching readings:', error);
@@ -89,11 +98,10 @@ const DeviceDetail = () => {
 
   const fetchRangeData = async (deviceId: number, start: Date, end: Date) => {
     try {
-      // Calculate days difference
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      const deviceReadings = await getDeviceReadings(deviceId, diffDays * 24); // Get data for the range
+      const deviceReadings = await getDeviceReadings(deviceId, diffDays * 24);
       setReadings(deviceReadings);
     } catch (error) {
       console.error('Error fetching range readings:', error);
@@ -108,6 +116,7 @@ const DeviceDetail = () => {
   const handleRefresh = () => {
     if (device?.id) {
       fetchDevice(device.id);
+      fetchThresholds();
     }
   };
 
@@ -129,7 +138,6 @@ const DeviceDetail = () => {
   const exportData = () => {
     if (!device || readings.length === 0) return;
 
-    // Convert readings to CSV
     const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)'];
     const csvContent = [
       headers.join(','),
@@ -140,7 +148,6 @@ const DeviceDetail = () => {
       ].join(','))
     ].join('\n');
 
-    // Create blob and download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -174,10 +181,17 @@ const DeviceDetail = () => {
   }
 
   const latestReading = readings.length > 0 ? readings[0] : undefined;
+  
+  const hasTemperatureWarning = latestReading && thresholds && 
+    (latestReading.temperature < thresholds.minTemperature || 
+    latestReading.temperature > thresholds.maxTemperature);
+    
+  const hasHumidityWarning = latestReading && thresholds && 
+    (latestReading.humidity < thresholds.minHumidity || 
+    latestReading.humidity > thresholds.maxHumidity);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => navigate('/devices')}>
@@ -204,8 +218,31 @@ const DeviceDetail = () => {
           </Button>
         </div>
       </div>
+      
+      {(hasTemperatureWarning || hasHumidityWarning) && (
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Warning</AlertTitle>
+          <AlertDescription>
+            <p>This device has readings outside the acceptable range:</p>
+            <ul className="list-disc list-inside mt-2">
+              {hasTemperatureWarning && (
+                <li>
+                  Temperature: {latestReading?.temperature}°C 
+                  (Acceptable range: {thresholds?.minTemperature}°C - {thresholds?.maxTemperature}°C)
+                </li>
+              )}
+              {hasHumidityWarning && (
+                <li>
+                  Humidity: {latestReading?.humidity}% 
+                  (Acceptable range: {thresholds?.minHumidity}% - {thresholds?.maxHumidity}%)
+                </li>
+              )}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
-      {/* Summary Cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -216,13 +253,19 @@ const DeviceDetail = () => {
           <CardContent>
             <div className={cn(
               "text-3xl font-bold",
-              latestReading?.temperature! > 28 || latestReading?.temperature! < 18 ? "temperature-text" : ""
+              hasTemperatureWarning ? "text-red-500" : ""
             )}>
               {latestReading ? `${latestReading.temperature}°C` : 'N/A'}
+              {hasTemperatureWarning && <AlertTriangle className="h-4 w-4 inline ml-1" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {latestReading ? `Last updated: ${format(new Date(latestReading.timestamp), 'yyyy-MM-dd HH:mm')}` : 'No readings available'}
             </p>
+            {thresholds && (
+              <p className="text-xs text-muted-foreground">
+                Acceptable range: {thresholds.minTemperature}°C - {thresholds.maxTemperature}°C
+              </p>
+            )}
           </CardContent>
         </Card>
         
@@ -235,13 +278,19 @@ const DeviceDetail = () => {
           <CardContent>
             <div className={cn(
               "text-3xl font-bold",
-              latestReading?.humidity! > 70 || latestReading?.humidity! < 30 ? "humidity-text" : ""
+              hasHumidityWarning ? "text-red-500" : ""
             )}>
               {latestReading ? `${latestReading.humidity}%` : 'N/A'}
+              {hasHumidityWarning && <AlertTriangle className="h-4 w-4 inline ml-1" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {latestReading ? `Last updated: ${format(new Date(latestReading.timestamp), 'yyyy-MM-dd HH:mm')}` : 'No readings available'}
             </p>
+            {thresholds && (
+              <p className="text-xs text-muted-foreground">
+                Acceptable range: {thresholds.minHumidity}% - {thresholds.maxHumidity}%
+              </p>
+            )}
           </CardContent>
         </Card>
         
@@ -262,7 +311,6 @@ const DeviceDetail = () => {
         </Card>
       </div>
 
-      {/* Charts */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle>Sensor Readings</CardTitle>
