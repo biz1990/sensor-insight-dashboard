@@ -7,9 +7,10 @@ import { getWarningThresholds } from '@/services/databaseService';
 interface DeviceListProps {
   devices: Device[];
   onDeviceDeleted?: () => void;
+  onDeviceDelete?: () => void; // Added this alias prop for compatibility
 }
 
-const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted }) => {
+const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted, onDeviceDelete }) => {
   const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
   
   useEffect(() => {
@@ -24,6 +25,15 @@ const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted }) => 
       console.error('Error fetching thresholds:', error);
     }
   };
+
+  // Use either callback, with onDeviceDeleted taking precedence
+  const handleDeviceDeleted = () => {
+    if (onDeviceDeleted) {
+      onDeviceDeleted();
+    } else if (onDeviceDelete) {
+      onDeviceDelete();
+    }
+  };
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -31,7 +41,7 @@ const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted }) => 
         <DeviceCard
           key={device.id}
           device={device}
-          onDelete={onDeviceDeleted}
+          onDelete={handleDeviceDeleted}
           thresholds={thresholds ? {
             minTemperature: thresholds.minTemperature,
             maxTemperature: thresholds.maxTemperature,
