@@ -36,16 +36,19 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
     return acc;
   }, {});
 
-  // Process data for scatter plot
+  // Process data for scatter plot with accurate timestamp handling
   const scatterData = Object.entries(deviceReadings).map(([deviceId, readings]) => {
     return {
       id: deviceId,
       name: `Device ${deviceId}`,
       data: readings.map(r => {
-        // Ensure we properly parse the timestamp from the database
-        const timestamp = typeof r.timestamp === 'string' 
-          ? parseISO(r.timestamp).getTime()
-          : new Date(r.timestamp).getTime();
+        // Handle timestamp properly based on its type
+        let timestamp;
+        if (typeof r.timestamp === 'string') {
+          timestamp = parseISO(r.timestamp).getTime();
+        } else {
+          timestamp = new Date(r.timestamp).getTime();
+        }
           
         return {
           x: timestamp,
@@ -53,7 +56,7 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           temperature: r.temperature,
           humidity: r.humidity,
           timestamp: r.timestamp,
-          formattedTime: format(timestamp, 'yyyy-MM-dd HH:mm'),
+          formattedTime: format(new Date(timestamp), 'yyyy-MM-dd HH:mm:ss'),
         };
       }).sort((a, b) => a.x - b.x), // Sort by timestamp
     };
@@ -76,9 +79,10 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           type="number"
           scale="time"
           domain={['dataMin', 'dataMax']}
-          tickFormatter={(timestamp) => format(timestamp, 'HH:mm')}
+          tickFormatter={(timestamp) => format(new Date(timestamp), 'HH:mm:ss')}
           name="Time"
           padding={{ left: 20, right: 20 }}
+          label={{ value: 'Time', position: 'insideBottom', offset: -10 }}
         />
         <YAxis
           dataKey="y"

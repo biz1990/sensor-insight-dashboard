@@ -20,15 +20,21 @@ interface DeviceColumnChartProps {
 }
 
 const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 300 }) => {
+  // Process data for chart display
   const chartData = data.map(reading => {
-    // Ensure we properly parse the timestamp from the database
-    const timestamp = typeof reading.timestamp === 'string' 
-      ? parseISO(reading.timestamp)
-      : new Date(reading.timestamp);
+    // Handle timestamp based on its type
+    let timestamp;
+    if (typeof reading.timestamp === 'string') {
+      // Parse ISO string to Date object
+      timestamp = parseISO(reading.timestamp);
+    } else {
+      // Handle when timestamp might be a Date or timestamp number
+      timestamp = new Date(reading.timestamp);
+    }
     
     return {
-      timestamp: format(timestamp, 'yyyy-MM-dd HH:mm'),
-      displayTime: format(timestamp, 'HH:mm'),
+      timestamp: format(timestamp, 'yyyy-MM-dd HH:mm:ss'),
+      displayTime: format(timestamp, 'HH:mm:ss'),
       temperature: reading.temperature,
       humidity: reading.humidity,
       originalTimestamp: reading.timestamp,
