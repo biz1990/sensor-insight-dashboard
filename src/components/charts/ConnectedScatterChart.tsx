@@ -46,6 +46,8 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
         let timestamp;
         if (typeof r.timestamp === 'string') {
           timestamp = parseISO(r.timestamp).getTime();
+        } else if (r.timestamp instanceof Date) {
+          timestamp = r.timestamp.getTime();
         } else {
           timestamp = new Date(r.timestamp).getTime();
         }
@@ -61,6 +63,9 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
       }).sort((a, b) => a.x - b.x), // Sort by timestamp
     };
   });
+
+  // Log for debugging
+  console.log('ConnectedScatterChart data:', scatterData);
 
   // Generate colors for different devices
   const generateColor = (index: number) => {

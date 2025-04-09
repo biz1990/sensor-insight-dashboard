@@ -27,8 +27,11 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
     if (typeof reading.timestamp === 'string') {
       // Parse ISO string to Date object
       timestamp = parseISO(reading.timestamp);
+    } else if (reading.timestamp instanceof Date) {
+      // Handle when timestamp is already a Date object
+      timestamp = reading.timestamp;
     } else {
-      // Handle when timestamp might be a Date or timestamp number
+      // Handle when timestamp is a number or other format
       timestamp = new Date(reading.timestamp);
     }
     
@@ -45,6 +48,9 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
     const dateB = new Date(b.timestamp);
     return dateA.getTime() - dateB.getTime();
   });
+
+  // Log the timestamp data for debugging
+  console.log('DeviceColumnChart chartData:', chartData);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
