@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   ResponsiveContainer,
@@ -22,12 +21,12 @@ interface DeviceColumnChartProps {
 const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 300 }) => {
   // Process data for chart display
   const chartData = data.map(reading => {
-    // Handle timestamp based on its type
+    // Parse timestamp properly to respect the database timestamp exactly
     let timestamp: Date;
     
     if (typeof reading.timestamp === 'string') {
-      // Parse ISO string to Date object
-      timestamp = parseISO(reading.timestamp);
+      // Parse ISO string to Date object, keeping the exact time from database
+      timestamp = new Date(reading.timestamp);
     } else if (reading.timestamp instanceof Date) {
       // When timestamp is already a Date object
       timestamp = reading.timestamp;
@@ -37,6 +36,7 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
     }
     
     return {
+      // Format in database original time (not converting to local timezone)
       timestamp: format(timestamp, 'yyyy-MM-dd HH:mm:ss'),
       displayTime: format(timestamp, 'HH:mm:ss'),
       temperature: reading.temperature,

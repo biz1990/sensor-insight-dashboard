@@ -13,7 +13,7 @@ import {
   Line,
   ComposedChart,
 } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { SensorReading } from '@/types';
 
 interface ConnectedScatterChartProps {
@@ -42,16 +42,20 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
       id: deviceId,
       name: `Device ${deviceId}`,
       data: readings.map(r => {
-        // Handle timestamp properly based on its type
+        // Handle timestamp properly based on its type without converting to local timezone
         let timestamp: number;
+        let dateObj: Date;
         
         if (typeof r.timestamp === 'string') {
-          timestamp = parseISO(r.timestamp).getTime();
-        } else if (r.timestamp instanceof Date) {
-          timestamp = r.timestamp.getTime();
+          dateObj = new Date(r.timestamp);
+          timestamp = dateObj.getTime();
+        } else if (r.timestamp && typeof r.timestamp === 'object' && 'getTime' in r.timestamp) {
+          dateObj = r.timestamp as Date;
+          timestamp = dateObj.getTime();
         } else {
           // Handle when timestamp is a number or other format
-          timestamp = new Date(r.timestamp as any).getTime();
+          dateObj = new Date(r.timestamp as any);
+          timestamp = dateObj.getTime();
         }
           
         return {
@@ -60,7 +64,7 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           temperature: r.temperature,
           humidity: r.humidity,
           timestamp: r.timestamp,
-          formattedTime: format(new Date(timestamp), 'yyyy-MM-dd HH:mm:ss'),
+          formattedTime: format(dateObj, 'yyyy-MM-dd HH:mm:ss'),
         };
       }).sort((a, b) => a.x - b.x), // Sort by timestamp
     };
