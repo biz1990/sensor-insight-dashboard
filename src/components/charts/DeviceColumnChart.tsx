@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   ResponsiveContainer,
@@ -18,42 +17,50 @@ import { SensorReading } from '@/types';
 interface DeviceColumnChartProps {
   data: SensorReading[];
   height?: number;
+  limit?: number;
 }
 
-const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 300 }) => {
-  // Process data for chart display
-  const chartData = data.map(reading => {
-    // Parse timestamp properly to respect the database timestamp exactly
-    let timestamp: Date;
-    
-    if (typeof reading.timestamp === 'string') {
-      // Parse ISO string to Date object, keeping the exact time from database
-      timestamp = new Date(reading.timestamp);
-    } else if (reading.timestamp && typeof reading.timestamp === 'object' && 'getTime' in reading.timestamp) {
-      // When timestamp is already a Date object
-      timestamp = reading.timestamp;
-    } else {
-      // Handle when timestamp is a number or other format
-      timestamp = new Date(reading.timestamp as any);
-    }
-    
-    // Format time directly from the database time without timezone conversion
-    const dbTime = formatInTimeZone(timestamp, 'UTC', 'yyyy-MM-dd HH:mm:ss');
-    const displayTime = formatInTimeZone(timestamp, 'UTC', 'HH:mm:ss');
-    
-    return {
-      timestamp: dbTime,
-      displayTime: displayTime,
-      temperature: reading.temperature,
-      humidity: reading.humidity,
-      originalTimestamp: reading.timestamp,
-    };
-  }).sort((a, b) => {
-    // Sort by timestamp to ensure chronological order
-    const dateA = new Date(a.timestamp);
-    const dateB = new Date(b.timestamp);
-    return dateA.getTime() - dateB.getTime();
-  });
+const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ 
+  data, 
+  height = 300,
+  limit = 10 
+}) => {
+  // Process data for chart display and limit to last N values
+  const chartData = data
+    .map(reading => {
+      // Parse timestamp properly to respect the database timestamp exactly
+      let timestamp: Date;
+      
+      if (typeof reading.timestamp === 'string') {
+        // Parse ISO string to Date object, keeping the exact time from database
+        timestamp = new Date(reading.timestamp);
+      } else if (reading.timestamp && typeof reading.timestamp === 'object' && 'getTime' in reading.timestamp) {
+        // When timestamp is already a Date object
+        timestamp = reading.timestamp;
+      } else {
+        // Handle when timestamp is a number or other format
+        timestamp = new Date(reading.timestamp as any);
+      }
+      
+      // Format time directly from the database time without timezone conversion
+      const dbTime = formatInTimeZone(timestamp, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+      const displayTime = formatInTimeZone(timestamp, 'UTC', 'HH:mm:ss');
+      
+      return {
+        timestamp: dbTime,
+        displayTime: displayTime,
+        temperature: reading.temperature,
+        humidity: reading.humidity,
+        originalTimestamp: reading.timestamp,
+      };
+    })
+    .sort((a, b) => {
+      // Sort by timestamp to ensure chronological order
+      const dateA = new Date(a.timestamp);
+      const dateB = new Date(b.timestamp);
+      return dateA.getTime() - dateB.getTime();
+    })
+    .slice(-limit); // Take only the last N readings
 
   // Log the timestamp data for debugging
   console.log('DeviceColumnChart chartData:', chartData);

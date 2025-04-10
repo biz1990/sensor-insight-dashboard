@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,34 +28,21 @@ const DeviceDetail = () => {
   const [activeTab, setActiveTab] = useState<'daily' | 'range'>('daily');
   const { toast } = useToast();
   const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [refreshInterval] = useState<number>(30000); // 30 seconds
 
-  useEffect(() => {
-    if (id) {
-      fetchDevice(parseInt(id));
-      fetchThresholds();
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (device?.id) {
-      if (activeTab === 'daily') {
-        fetchDailyData(device.id, selectedDate);
-      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
-        fetchRangeData(device.id, dateRange.from, dateRange.to);
-      }
-    }
-  }, [device, selectedDate, dateRange, activeTab]);
-
-  const fetchThresholds = async () => {
+  // Memoized fetch functions to avoid recreation on each render
+  const fetchThresholds = useCallback(async () => {
     try {
       const thresholdsData = await getWarningThresholds();
       setThresholds(thresholdsData);
     } catch (error) {
       console.error('Error fetching thresholds:', error);
     }
-  };
+  }, []);
 
-  const fetchDevice = async (deviceId: number) => {
+  const fetchDevice = useCallback(async (deviceId: number) => {
     setIsLoading(true);
     try {
       const devices = await getDevices();
@@ -62,13 +50,14 @@ const DeviceDetail = () => {
       
       if (fetchedDevice) {
         setDevice(fetchedDevice);
-        fetchDailyData(deviceId, selectedDate);
+        return true;
       } else {
         toast({
           title: "Device not found",
           description: "Could not find the requested device",
           variant: "destructive",
         });
+        return false;
       }
     } catch (error) {
       console.error('Error fetching device:', error);
@@ -77,15 +66,17 @@ const DeviceDetail = () => {
         description: "Failed to load device information",
         variant: "destructive",
       });
+      return false;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
-  const fetchDailyData = async (deviceId: number, date: Date) => {
+  const fetchDailyData = useCallback(async (deviceId: number) => {
     try {
       const deviceReadings = await getDeviceReadings(deviceId, 24);
       setReadings(deviceReadings);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching readings:', error);
       toast({
@@ -94,15 +85,16 @@ const DeviceDetail = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
-  const fetchRangeData = async (deviceId: number, start: Date, end: Date) => {
+  const fetchRangeData = useCallback(async (deviceId: number, start: Date, end: Date) => {
     try {
       const diffTime = Math.abs(end.getTime() - start.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
       const deviceReadings = await getDeviceReadings(deviceId, diffDays * 24);
       setReadings(deviceReadings);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching range readings:', error);
       toast({
@@ -111,13 +103,70 @@ const DeviceDetail = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
+
+  // Initial load
+  useEffect(() => {
+    if (id) {
+      const deviceId = parseInt(id);
+      fetchDevice(deviceId).then(success => {
+        if (success) {
+          fetchDailyData(deviceId);
+        }
+      });
+      fetchThresholds();
+    }
+  }, [id, fetchDevice, fetchDailyData, fetchThresholds]);
+
+  // Set up real-time data refresh
+  useEffect(() => {
+    if (!autoRefresh || !device?.id) return;
+    
+    const refreshData = () => {
+      if (activeTab === 'daily') {
+        fetchDailyData(device.id);
+      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+        fetchRangeData(device.id, dateRange.from, dateRange.to);
+      }
+    };
+    
+    // Set up interval for auto-refresh
+    const intervalId = setInterval(refreshData, refreshInterval);
+    
+    // Clean up interval on unmount or when dependencies change
+    return () => clearInterval(intervalId);
+  }, [device, activeTab, dateRange, autoRefresh, refreshInterval, fetchDailyData, fetchRangeData]);
+
+  // Effect for changing tab or date
+  useEffect(() => {
+    if (device?.id) {
+      if (activeTab === 'daily') {
+        fetchDailyData(device.id);
+      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+        fetchRangeData(device.id, dateRange.from, dateRange.to);
+      }
+    }
+  }, [device?.id, selectedDate, dateRange, activeTab, fetchDailyData, fetchRangeData]);
 
   const handleRefresh = () => {
     if (device?.id) {
-      fetchDevice(device.id);
+      if (activeTab === 'daily') {
+        fetchDailyData(device.id);
+      } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+        fetchRangeData(device.id, dateRange.from, dateRange.to);
+      }
       fetchThresholds();
     }
+  };
+
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(prev => !prev);
+    toast({
+      title: autoRefresh ? "Auto-refresh disabled" : "Auto-refresh enabled",
+      description: autoRefresh 
+        ? "You'll need to refresh manually to see new data" 
+        : "Data will update automatically every 30 seconds",
+    });
   };
 
   const getStatusBadge = (status?: string) => {
@@ -180,7 +229,7 @@ const DeviceDetail = () => {
     );
   }
 
-  const latestReading = readings.length > 0 ? readings[0] : undefined;
+  const latestReading = readings.length > 0 ? readings[readings.length - 1] : undefined;
   
   const hasTemperatureWarning = latestReading && thresholds && 
     (latestReading.temperature < thresholds.minTemperature || 
@@ -205,16 +254,24 @@ const DeviceDetail = () => {
             <p className="text-muted-foreground">
               {device.location?.name} • Serial: {device.serialNumber}
             </p>
+            <p className="text-xs text-muted-foreground">
+              Last updated: {format(lastUpdated, 'yyyy-MM-dd HH:mm:ss')} 
+              {autoRefresh && <span className="ml-1">(Auto-refresh: ON)</span>}
+            </p>
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={toggleAutoRefresh} className="gap-2">
+            <RefreshCw className={cn("h-4 w-4", autoRefresh && "animate-spin")} />
+            {autoRefresh ? "Disable Auto-refresh" : "Enable Auto-refresh"}
+          </Button>
           <Button variant="outline" onClick={exportData} className="gap-2">
             <Download className="h-4 w-4" />
             Export Data
           </Button>
           <Button onClick={handleRefresh} className="gap-2">
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            Refresh Now
           </Button>
         </div>
       </div>
@@ -243,6 +300,7 @@ const DeviceDetail = () => {
         </Alert>
       )}
 
+      {/* Status cards with real-time data */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -259,7 +317,7 @@ const DeviceDetail = () => {
               {hasTemperatureWarning && <AlertTriangle className="h-4 w-4 inline ml-1" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {latestReading ? `Last updated: ${format(new Date(latestReading.timestamp), 'yyyy-MM-dd HH:mm')}` : 'No readings available'}
+              {latestReading ? `Last updated: ${format(new Date(latestReading.timestamp), 'yyyy-MM-dd HH:mm:ss')}` : 'No readings available'}
             </p>
             {thresholds && (
               <p className="text-xs text-muted-foreground">
@@ -284,7 +342,7 @@ const DeviceDetail = () => {
               {hasHumidityWarning && <AlertTriangle className="h-4 w-4 inline ml-1" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {latestReading ? `Last updated: ${format(new Date(latestReading.timestamp), 'yyyy-MM-dd HH:mm')}` : 'No readings available'}
+              {latestReading ? `Last updated: ${format(new Date(latestReading.timestamp), 'yyyy-MM-dd HH:mm:ss')}` : 'No readings available'}
             </p>
             {thresholds && (
               <p className="text-xs text-muted-foreground">
@@ -307,6 +365,9 @@ const DeviceDetail = () => {
             <p className="text-xs text-muted-foreground mt-1">
               Device added: {format(new Date(device.createdAt), 'yyyy-MM-dd')}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Auto-refresh: {autoRefresh ? 'Enabled (30s)' : 'Disabled'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -315,7 +376,7 @@ const DeviceDetail = () => {
         <CardHeader className="pb-2">
           <CardTitle>Sensor Readings</CardTitle>
           <CardDescription>
-            Historical temperature and humidity data
+            Historical temperature and humidity data (showing last 10 readings)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -390,7 +451,11 @@ const DeviceDetail = () => {
             
             <div className="pt-4">
               {readings.length > 0 ? (
-                <DeviceColumnChart data={readings} height={400} />
+                <DeviceColumnChart 
+                  data={readings} 
+                  height={400}
+                  limit={10} // Show only the last 10 readings
+                />
               ) : (
                 <div className="text-center py-10 text-muted-foreground">
                   No sensor readings available for the selected timeframe

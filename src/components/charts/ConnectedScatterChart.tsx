@@ -21,12 +21,14 @@ interface ConnectedScatterChartProps {
   data: SensorReading[];
   compareType: 'temperature' | 'humidity';
   height?: number;
+  limit?: number;
 }
 
 const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({ 
   data, 
   compareType, 
-  height = 400 
+  height = 400,
+  limit = 10
 }) => {
   // Group readings by deviceId
   const deviceReadings = data.reduce<Record<number, SensorReading[]>>((acc, reading) => {
@@ -39,10 +41,19 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
 
   // Process data for scatter plot with accurate timestamp handling
   const scatterData = Object.entries(deviceReadings).map(([deviceId, readings]) => {
+    // Sort and limit readings for each device
+    const sortedLimitedReadings = [...readings]
+      .sort((a, b) => {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      })
+      .slice(-limit); // Take only the last N readings
+
     return {
       id: deviceId,
       name: `Device ${deviceId}`,
-      data: readings.map(r => {
+      data: sortedLimitedReadings.map(r => {
         // Handle timestamp properly based on its type without converting to local timezone
         let timestamp: number;
         let dateObj: Date;

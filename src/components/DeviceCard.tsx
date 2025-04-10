@@ -1,14 +1,14 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Thermometer, Droplets, Clock, Info, Trash2, AlertTriangle } from 'lucide-react';
-import { Device } from '@/types';
+import { Device, SensorReading } from '@/types';
 import { format } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
-import { deleteDevice } from '@/services/databaseService';
+import { deleteDevice, getDeviceReadings } from '@/services/databaseService';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 type DeviceCardProps = {
@@ -20,11 +20,50 @@ type DeviceCardProps = {
     minHumidity: number;
     maxHumidity: number;
   };
+  autoRefresh?: boolean;
+  refreshInterval?: number;
 };
 
-const DeviceCard: React.FC<DeviceCardProps> = ({ device, onDelete, thresholds }) => {
+const DeviceCard: React.FC<DeviceCardProps> = ({ 
+  device, 
+  onDelete, 
+  thresholds,
+  autoRefresh = true,
+  refreshInterval = 30000 // 30 seconds default
+}) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [lastReading, setLastReading] = useState<SensorReading | undefined>(device.lastReading);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  
+  // Auto-refresh effect for real-time updates
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const fetchLatestReading = async () => {
+      try {
+        // Get latest reading for this device
+        const readings = await getDeviceReadings(device.id, 1);
+        if (readings && readings.length > 0) {
+          setLastReading(readings[0]);
+          setLastUpdated(new Date());
+        }
+      } catch (error) {
+        console.error('Error fetching latest reading:', error);
+      }
+    };
+    
+    // Initial fetch
+    fetchLatestReading();
+    
+    // Set up interval for auto-refresh
+    const intervalId = setInterval(fetchLatestReading, refreshInterval);
+    
+    // Cleanup on unmount
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [device.id, autoRefresh, refreshInterval]);
   
   const getStatusColor = (status: string) => {
     switch(status) {
@@ -35,9 +74,9 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onDelete, thresholds })
     }
   };
   
-  const formatTimestamp = (timestamp: string) => {
+  const formatTimestamp = (timestamp: string | Date) => {
     try {
-      return format(new Date(timestamp), 'yyyy-MM-dd HH:mm');
+      return format(new Date(timestamp), 'yyyy-MM-dd HH:mm:ss');
     } catch (e) {
       return 'Unknown';
     }
@@ -81,13 +120,13 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onDelete, thresholds })
   };
   
   // Check if temperature or humidity is outside of threshold limits
-  const hasTemperatureWarning = device.lastReading && thresholds && 
-    (device.lastReading.temperature < thresholds.minTemperature || 
-     device.lastReading.temperature > thresholds.maxTemperature);
+  const hasTemperatureWarning = lastReading && thresholds && 
+    (lastReading.temperature < thresholds.minTemperature || 
+     lastReading.temperature > thresholds.maxTemperature);
      
-  const hasHumidityWarning = device.lastReading && thresholds && 
-    (device.lastReading.humidity < thresholds.minHumidity || 
-     device.lastReading.humidity > thresholds.maxHumidity);
+  const hasHumidityWarning = lastReading && thresholds && 
+    (lastReading.humidity < thresholds.minHumidity || 
+     lastReading.humidity > thresholds.maxHumidity);
   
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -115,12 +154,12 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onDelete, thresholds })
           Location: {device.location?.name || 'Unknown'}
         </p>
         
-        {device.lastReading && (
+        {lastReading && (
           <div className="mt-4 space-y-2">
             <div className="flex items-center gap-2">
               <Thermometer className={`h-4 w-4 ${hasTemperatureWarning ? 'text-red-500' : 'text-blue-500'}`} />
               <span className={`text-sm ${hasTemperatureWarning ? 'font-bold text-red-500' : ''}`}>
-                {device.lastReading.temperature}°C
+                {lastReading.temperature}°C
                 {hasTemperatureWarning && (
                   <AlertTriangle className="h-3 w-3 inline ml-1 text-red-500" />
                 )}
@@ -130,7 +169,7 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onDelete, thresholds })
             <div className="flex items-center gap-2">
               <Droplets className={`h-4 w-4 ${hasHumidityWarning ? 'text-red-500' : 'text-blue-500'}`} />
               <span className={`text-sm ${hasHumidityWarning ? 'font-bold text-red-500' : ''}`}>
-                {device.lastReading.humidity}% RH
+                {lastReading.humidity}% RH
                 {hasHumidityWarning && (
                   <AlertTriangle className="h-3 w-3 inline ml-1 text-red-500" />
                 )}
@@ -140,8 +179,12 @@ const DeviceCard: React.FC<DeviceCardProps> = ({ device, onDelete, thresholds })
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-blue-500" />
               <span className="text-sm">
-                {formatTimestamp(device.lastReading.timestamp)}
+                {formatTimestamp(lastReading.timestamp)}
               </span>
+            </div>
+            
+            <div className="text-xs text-muted-foreground">
+              Last updated: {format(lastUpdated, 'HH:mm:ss')}
             </div>
           </div>
         )}

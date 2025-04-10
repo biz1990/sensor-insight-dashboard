@@ -8,14 +8,28 @@ interface DeviceListProps {
   devices: Device[];
   onDeviceDeleted?: () => void;
   onDeviceDelete?: () => void; // Added this alias prop for compatibility
+  autoRefresh?: boolean;
+  refreshInterval?: number;
 }
 
-const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted, onDeviceDelete }) => {
+const DeviceList: React.FC<DeviceListProps> = ({ 
+  devices, 
+  onDeviceDeleted, 
+  onDeviceDelete,
+  autoRefresh = true,
+  refreshInterval = 30000 // 30 seconds
+}) => {
   const [thresholds, setThresholds] = useState<WarningThreshold | null>(null);
   
   useEffect(() => {
     fetchThresholds();
-  }, []);
+    
+    // Set up interval for refreshing thresholds
+    if (autoRefresh) {
+      const intervalId = setInterval(fetchThresholds, refreshInterval);
+      return () => clearInterval(intervalId);
+    }
+  }, [autoRefresh, refreshInterval]);
   
   const fetchThresholds = async () => {
     try {
@@ -48,6 +62,8 @@ const DeviceList: React.FC<DeviceListProps> = ({ devices, onDeviceDeleted, onDev
             minHumidity: thresholds.minHumidity,
             maxHumidity: thresholds.maxHumidity
           } : undefined}
+          autoRefresh={autoRefresh}
+          refreshInterval={refreshInterval}
         />
       ))}
     </div>
