@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -81,6 +80,7 @@ const DeviceCard: React.FC<DeviceCardProps> = ({
       const date = new Date(timestamp);
       return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss');
     } catch (e) {
+      console.error('Error formatting timestamp:', e);
       return 'Unknown';
     }
   };

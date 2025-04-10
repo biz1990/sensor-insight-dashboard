@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -222,7 +221,7 @@ const Dashboard = () => {
 
       {/* Warning Section */}
       {warningDevices.length > 0 && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="warning" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Devices with Warnings</AlertTitle>
           <AlertDescription>
@@ -235,10 +234,9 @@ const Dashboard = () => {
                       {device.lastReading.temperature}°C / {device.lastReading.humidity}%
                       {device.lastReading.timestamp && (
                         <span className="text-xs ml-2">
-                          ({format(
-                            typeof device.lastReading.timestamp === 'string' 
-                              ? parseISO(device.lastReading.timestamp) 
-                              : new Date(device.lastReading.timestamp),
+                          ({formatInTimeZone(
+                            new Date(device.lastReading.timestamp),
+                            'UTC',
                             "yyyy-MM-dd HH:mm:ss"
                           )})
                         </span>

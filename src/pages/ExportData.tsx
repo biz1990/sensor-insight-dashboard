@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, AlertCircle } from 'lucide-react';
+import { CalendarIcon, Download, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { DateRange, Device } from '@/types';
@@ -47,6 +46,8 @@ const ExportData = () => {
   const [selectedDevice, setSelectedDevice] = useState<string>('all');
   const [dateRange, setDateRange] = useState<DayPickerDateRange | undefined>();
   const [isLoading, setIsLoading] = useState(true);
+  const [isPending, setIsPending] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -71,6 +72,7 @@ const ExportData = () => {
   };
 
   const handleExport = async () => {
+    setIsPending(true);
     try {
       if (!dateRange?.from || !dateRange?.to) {
         toast({
@@ -160,11 +162,9 @@ const ExportData = () => {
       });
     } catch (error) {
       console.error('Error exporting data:', error);
-      toast({
-        title: "Export failed",
-        description: "An error occurred while exporting data.",
-        variant: "destructive",
-      });
+      setExportError(error.message);
+    } finally {
+      setIsPending(false);
     }
   };
 
@@ -240,6 +240,22 @@ const ExportData = () => {
               </div>
             </div>
             
+            {isPending && (
+              <Alert className="mt-4">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <AlertTitle>Processing</AlertTitle>
+                <AlertDescription>Generating your export file...</AlertDescription>
+              </Alert>
+            )}
+
+            {exportError && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{exportError}</AlertDescription>
+              </Alert>
+            )}
+
             <Button 
               onClick={handleExport} 
               disabled={!dateRange || !dateRange.from || !dateRange.to}

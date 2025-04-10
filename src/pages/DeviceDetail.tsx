@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Trash2, RefreshCcw, Clock } from 'lucide-react';
+import { ArrowLeft, Trash2, RefreshCcw, Clock, Loader2 } from 'lucide-react';
 import { Device, SensorReading } from '@/types';
 import { format, startOfDay, endOfDay, subHours } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -21,6 +21,7 @@ import DeviceColumnChart from '@/components/charts/DeviceColumnChart';
 import ConnectedScatterChart from '@/components/charts/ConnectedScatterChart';
 import { DateRange } from "react-day-picker";
 import DateModeSwitcher from '@/components/DateModeSwitcher';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const DeviceDetail = () => {
   const { deviceId } = useParams();
@@ -29,6 +30,7 @@ const DeviceDetail = () => {
   const [device, setDevice] = useState<Device | null>(null);
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [dateMode, setDateMode] = useState<'latest' | 'daily' | 'range'>('latest');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subHours(new Date(), 24),
@@ -50,21 +52,25 @@ const DeviceDetail = () => {
       if (!deviceId) return;
       
       setIsLoading(true);
+      setLoadingError(null);
+      
       try {
+        console.log('Fetching device data for ID:', deviceId);
         // Fetch device details
         const devices = await getDevices();
         const currentDevice = devices.find(d => d.id === Number(deviceId));
         
         if (!currentDevice) {
+          setLoadingError(`Device with ID ${deviceId} not found`);
           toast({
             title: "Error",
             description: "Device not found",
             variant: "destructive",
           });
-          navigate('/devices');
           return;
         }
         
+        console.log('Device found:', currentDevice);
         setDevice(currentDevice);
         
         // Fetch readings based on date mode
@@ -72,10 +78,12 @@ const DeviceDetail = () => {
         
         if (dateMode === 'latest') {
           // Get last 10 readings
+          console.log('Fetching latest readings');
           fetchedReadings = await getDeviceReadings(Number(deviceId), 24);
           fetchedReadings = fetchedReadings.slice(-10);
         } else if (dateMode === 'daily') {
           // Get readings for today
+          console.log('Fetching daily readings');
           const today = new Date();
           const startOfToday = startOfDay(today);
           const endOfToday = endOfDay(today);
@@ -87,6 +95,7 @@ const DeviceDetail = () => {
           });
         } else if (dateMode === 'range' && dateRange?.from) {
           // Get readings for date range
+          console.log('Fetching range readings', dateRange);
           const startDate = startOfDay(dateRange.from);
           const endDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(new Date());
           
@@ -97,9 +106,11 @@ const DeviceDetail = () => {
           });
         }
         
+        console.log(`Fetched ${fetchedReadings.length} readings for device`);
         setReadings(fetchedReadings);
       } catch (error) {
         console.error('Error fetching device data:', error);
+        setLoadingError('Failed to load device data. Please check your connection to the API server.');
         toast({
           title: "Error",
           description: "Failed to load device data",
@@ -149,8 +160,8 @@ const DeviceDetail = () => {
   
   const formatTimestamp = (timestamp: string | Date) => {
     try {
-      // Use formatInTimeZone with UTC to preserve database timestamps
       const date = new Date(timestamp);
+      // Use UTC to maintain consistency across the application
       return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss');
     } catch (e) {
       return 'Unknown';
@@ -160,7 +171,25 @@ const DeviceDetail = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)]">
-        <p>Loading device data...</p>
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-8 w-8 animate-spin mb-4 text-primary" />
+          <p>Loading device data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (loadingError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)]">
+        <Alert variant="destructive" className="mb-4 max-w-md">
+          <AlertTitle>Error Loading Device</AlertTitle>
+          <AlertDescription>{loadingError}</AlertDescription>
+        </Alert>
+        <Button onClick={() => navigate('/devices')} className="mt-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Devices
+        </Button>
       </div>
     );
   }
