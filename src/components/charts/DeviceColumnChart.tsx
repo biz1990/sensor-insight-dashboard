@@ -18,33 +18,33 @@ interface DeviceColumnChartProps {
   data: SensorReading[];
   height?: number;
   limit?: number;
+  dateMode?: 'latest' | 'daily' | 'range';
 }
 
 const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ 
   data, 
   height = 300,
-  limit = 10 
+  limit = 10,
+  dateMode = 'latest'
 }) => {
-  // Process data for chart display and limit to last N values
+  // Process data for chart display based on mode
   const chartData = data
     .map(reading => {
-      // Parse timestamp properly to respect the database timestamp exactly
-      let timestamp: Date;
+      // Parse timestamp properly from database value
+      let dateObj: Date;
       
       if (typeof reading.timestamp === 'string') {
-        // Parse ISO string to Date object, keeping the exact time from database
-        timestamp = new Date(reading.timestamp);
+        dateObj = new Date(reading.timestamp);
       } else if (reading.timestamp && typeof reading.timestamp === 'object' && 'getTime' in reading.timestamp) {
-        // When timestamp is already a Date object
-        timestamp = reading.timestamp;
+        dateObj = reading.timestamp as Date;
       } else {
-        // Handle when timestamp is a number or other format
-        timestamp = new Date(reading.timestamp as any);
+        dateObj = new Date(reading.timestamp as any);
       }
       
-      // Format time directly from the database time without timezone conversion
-      const dbTime = formatInTimeZone(timestamp, 'UTC', 'yyyy-MM-dd HH:mm:ss');
-      const displayTime = formatInTimeZone(timestamp, 'UTC', 'HH:mm:ss');
+      // Keep database timestamp formatting without timezone conversion
+      // This displays the time exactly as stored in the database
+      const dbTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+      const displayTime = formatInTimeZone(dateObj, 'UTC', 'HH:mm:ss');
       
       return {
         timestamp: dbTime,
@@ -52,23 +52,31 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({
         temperature: reading.temperature,
         humidity: reading.humidity,
         originalTimestamp: reading.timestamp,
+        date: dateObj,
       };
     })
-    .sort((a, b) => {
-      // Sort by timestamp to ensure chronological order
-      const dateA = new Date(a.timestamp);
-      const dateB = new Date(b.timestamp);
-      return dateA.getTime() - dateB.getTime();
-    })
-    .slice(-limit); // Take only the last N readings
+    .sort((a, b) => a.date.getTime() - b.date.getTime()); // Sort by timestamp
+  
+  // Apply proper data filtering based on mode
+  let filteredData = chartData;
+  
+  if (dateMode === 'latest') {
+    // For latest mode, just take the last N readings
+    filteredData = chartData.slice(-limit);
+  } else if (dateMode === 'daily') {
+    // For daily mode, we'll show all data as it's already filtered by parent component
+    filteredData = chartData;
+  } else if (dateMode === 'range') {
+    // For range mode, we'll show all data as it's already filtered by parent component
+    filteredData = chartData;
+  }
 
-  // Log the timestamp data for debugging
-  console.log('DeviceColumnChart chartData:', chartData);
+  console.log('DeviceColumnChart filtered data:', filteredData);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
-        data={chartData}
+        data={filteredData}
         margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
       >
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />

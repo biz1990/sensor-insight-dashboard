@@ -22,13 +22,15 @@ interface ConnectedScatterChartProps {
   compareType: 'temperature' | 'humidity';
   height?: number;
   limit?: number;
+  dateMode?: 'latest' | 'daily' | 'range';
 }
 
 const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({ 
   data, 
   compareType, 
   height = 400,
-  limit = 10
+  limit = 10,
+  dateMode = 'latest'
 }) => {
   // Group readings by deviceId
   const deviceReadings = data.reduce<Record<number, SensorReading[]>>((acc, reading) => {
@@ -41,40 +43,40 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
 
   // Process data for scatter plot with accurate timestamp handling
   const scatterData = Object.entries(deviceReadings).map(([deviceId, readings]) => {
-    // Sort and limit readings for each device
-    const sortedLimitedReadings = [...readings]
-      .sort((a, b) => {
-        const timeA = new Date(a.timestamp).getTime();
-        const timeB = new Date(b.timestamp).getTime();
-        return timeA - timeB;
-      })
-      .slice(-limit); // Take only the last N readings
-
+    // First sort readings by timestamp
+    const sortedReadings = [...readings].sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeA - timeB;
+    });
+    
+    // Apply filtering based on dateMode
+    let filteredReadings = sortedReadings;
+    if (dateMode === 'latest') {
+      filteredReadings = sortedReadings.slice(-limit);
+    }
+    // For daily and range, we assume the data has already been filtered by parent component
+    
     return {
       id: deviceId,
       name: `Device ${deviceId}`,
-      data: sortedLimitedReadings.map(r => {
+      data: filteredReadings.map(r => {
         // Handle timestamp properly based on its type without converting to local timezone
-        let timestamp: number;
         let dateObj: Date;
         
         if (typeof r.timestamp === 'string') {
           dateObj = new Date(r.timestamp);
-          timestamp = dateObj.getTime();
         } else if (r.timestamp && typeof r.timestamp === 'object' && 'getTime' in r.timestamp) {
           dateObj = r.timestamp as Date;
-          timestamp = dateObj.getTime();
         } else {
-          // Handle when timestamp is a number or other format
           dateObj = new Date(r.timestamp as any);
-          timestamp = dateObj.getTime();
         }
         
-        // Format time directly with database time
+        // Format time using database time format without timezone conversion
         const formattedTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
           
         return {
-          x: timestamp,
+          x: dateObj.getTime(),
           y: compareType === 'temperature' ? r.temperature : r.humidity,
           temperature: r.temperature,
           humidity: r.humidity,
@@ -85,7 +87,6 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
     };
   });
 
-  // Log for debugging
   console.log('ConnectedScatterChart data:', scatterData);
 
   // Generate colors for different devices

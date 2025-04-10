@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Thermometer, Droplets, Clock, Info, Trash2, AlertTriangle } from 'lucide-react';
 import { Device, SensorReading } from '@/types';
 import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { useToast } from "@/hooks/use-toast";
 import { deleteDevice, getDeviceReadings } from '@/services/databaseService';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -76,7 +77,9 @@ const DeviceCard: React.FC<DeviceCardProps> = ({
   
   const formatTimestamp = (timestamp: string | Date) => {
     try {
-      return format(new Date(timestamp), 'yyyy-MM-dd HH:mm:ss');
+      // Use formatInTimeZone with UTC to preserve database timestamps
+      const date = new Date(timestamp);
+      return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss');
     } catch (e) {
       return 'Unknown';
     }
@@ -207,11 +210,42 @@ const DeviceCard: React.FC<DeviceCardProps> = ({
       </CardContent>
       
       <CardFooter className="bg-muted/30 p-4 flex justify-between">
-        <Button variant="outline" size="sm" onClick={handleViewDetails}>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/devices/${device.id}`)}>
           <Info className="h-4 w-4 mr-1" />
           Details
         </Button>
-        <Button variant="destructive" size="sm" onClick={handleDeleteDevice}>
+        <Button variant="destructive" size="sm" onClick={async () => {
+          if (window.confirm(`Are you sure you want to delete ${device.name}?`)) {
+            try {
+              const result = await deleteDevice(device.id);
+              
+              if (result.success) {
+                toast({
+                  title: "Device Deleted",
+                  description: result.message,
+                });
+                
+                // Call the onDelete callback if provided to refresh the list
+                if (onDelete) {
+                  onDelete();
+                }
+              } else {
+                toast({
+                  title: "Error",
+                  description: result.message,
+                  variant: "destructive",
+                });
+              }
+            } catch (error) {
+              toast({
+                title: "Error",
+                description: "Failed to delete device. Please try again.",
+                variant: "destructive",
+              });
+              console.error('Error deleting device:', error);
+            }
+          }
+        }}>
           <Trash2 className="h-4 w-4 mr-1" />
           Delete
         </Button>
