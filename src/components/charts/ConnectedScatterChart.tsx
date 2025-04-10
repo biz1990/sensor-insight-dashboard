@@ -14,6 +14,7 @@ import {
   ComposedChart,
 } from 'recharts';
 import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { SensorReading } from '@/types';
 
 interface ConnectedScatterChartProps {
@@ -57,6 +58,9 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           dateObj = new Date(r.timestamp as any);
           timestamp = dateObj.getTime();
         }
+        
+        // Format time directly with database time
+        const formattedTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
           
         return {
           x: timestamp,
@@ -64,7 +68,7 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           temperature: r.temperature,
           humidity: r.humidity,
           timestamp: r.timestamp,
-          formattedTime: format(dateObj, 'yyyy-MM-dd HH:mm:ss'),
+          formattedTime: formattedTime,
         };
       }).sort((a, b) => a.x - b.x), // Sort by timestamp
     };
@@ -90,7 +94,7 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
           type="number"
           scale="time"
           domain={['dataMin', 'dataMax']}
-          tickFormatter={(timestamp) => format(new Date(timestamp), 'HH:mm:ss')}
+          tickFormatter={(timestamp) => formatInTimeZone(new Date(timestamp), 'UTC', 'HH:mm:ss')}
           name="Time"
           padding={{ left: 20, right: 20 }}
           label={{ value: 'Time', position: 'insideBottom', offset: -10 }}

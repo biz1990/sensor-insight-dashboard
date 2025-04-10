@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   ResponsiveContainer,
@@ -10,7 +11,8 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { SensorReading } from '@/types';
 
 interface DeviceColumnChartProps {
@@ -27,7 +29,7 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
     if (typeof reading.timestamp === 'string') {
       // Parse ISO string to Date object, keeping the exact time from database
       timestamp = new Date(reading.timestamp);
-    } else if (reading.timestamp instanceof Date) {
+    } else if (reading.timestamp && typeof reading.timestamp === 'object' && 'getTime' in reading.timestamp) {
       // When timestamp is already a Date object
       timestamp = reading.timestamp;
     } else {
@@ -35,10 +37,13 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ data, height = 30
       timestamp = new Date(reading.timestamp as any);
     }
     
+    // Format time directly from the database time without timezone conversion
+    const dbTime = formatInTimeZone(timestamp, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+    const displayTime = formatInTimeZone(timestamp, 'UTC', 'HH:mm:ss');
+    
     return {
-      // Format in database original time (not converting to local timezone)
-      timestamp: format(timestamp, 'yyyy-MM-dd HH:mm:ss'),
-      displayTime: format(timestamp, 'HH:mm:ss'),
+      timestamp: dbTime,
+      displayTime: displayTime,
       temperature: reading.temperature,
       humidity: reading.humidity,
       originalTimestamp: reading.timestamp,
