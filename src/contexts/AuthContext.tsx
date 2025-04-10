@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Simulate API request
     return new Promise<boolean>((resolve) => {
       setTimeout(() => {
-        // For demo, just check if user exists with that email
+        // For demo, check if user exists with that email (and is registered)
         const foundUser = mockUsers.find(u => u.email === email);
         
         if (foundUser && foundUser.isActive) {
@@ -99,9 +99,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           resolve(false);
         } else {
+          // Create new user and push to mockUsers array (with isActive set to true for demo)
+          const newUser = {
+            id: mockUsers.length + 1,
+            username,
+            email,
+            password, // In a real app, this would be hashed
+            role: 'user',
+            isActive: true, // Changed from false to true so they can log in right away
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          mockUsers.push(newUser);
+          
           toast({
             title: "Registration successful",
-            description: "Your account has been created and is awaiting approval.",
+            description: "Your account has been created. You can now log in.",
           });
           resolve(true);
         }

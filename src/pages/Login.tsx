@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -24,6 +24,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -33,14 +34,30 @@ const formSchema = z.object({
 const Login = () => {
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { toast } = useToast();
+  
+  // Check if we're coming from registration
+  const fromRegistration = location.state?.fromRegistration || false;
+  const registeredEmail = location.state?.email || '';
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
+      email: registeredEmail || '',
       password: '',
     },
   });
+  
+  // Show toast when arriving from registration
+  useEffect(() => {
+    if (fromRegistration && registeredEmail) {
+      toast({
+        title: "Registration successful",
+        description: "Your account has been created. Please log in with your credentials.",
+      });
+    }
+  }, [fromRegistration, registeredEmail, toast]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const success = await login(values.email, values.password);

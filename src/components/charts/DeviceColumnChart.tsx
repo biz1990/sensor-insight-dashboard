@@ -19,64 +19,73 @@ interface DeviceColumnChartProps {
   height?: number;
   limit?: number;
   dateMode?: 'latest' | 'daily' | 'range';
+  autoRefresh?: boolean;
+  refreshInterval?: number;
 }
 
 const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({ 
   data, 
   height = 300,
   limit = 10,
-  dateMode = 'latest'
+  dateMode = 'latest',
+  autoRefresh = true,
+  refreshInterval = 30000
 }) => {
-  // Process data for chart display based on mode
-  const chartData = data
-    .map(reading => {
-      // Parse timestamp properly from database value
-      let dateObj: Date;
-      
-      if (typeof reading.timestamp === 'string') {
-        dateObj = new Date(reading.timestamp);
-      } else if (reading.timestamp && typeof reading.timestamp === 'object' && 'getTime' in reading.timestamp) {
-        dateObj = reading.timestamp as Date;
-      } else {
-        dateObj = new Date(reading.timestamp as any);
-      }
-      
-      // Keep database timestamp formatting without timezone conversion
-      // This displays the time exactly as stored in the database
-      const dbTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
-      const displayTime = formatInTimeZone(dateObj, 'UTC', 'HH:mm:ss');
-      
-      return {
-        timestamp: dbTime,
-        displayTime: displayTime,
-        temperature: reading.temperature,
-        humidity: reading.humidity,
-        originalTimestamp: reading.timestamp,
-        date: dateObj,
-      };
-    })
-    .sort((a, b) => a.date.getTime() - b.date.getTime()); // Sort by timestamp
+  const [chartData, setChartData] = React.useState<any[]>([]);
   
-  // Apply proper data filtering based on mode
-  let filteredData = chartData;
+  // Process data for chart display whenever data changes
+  React.useEffect(() => {
+    const processedData = data
+      .map(reading => {
+        // Parse timestamp properly from database value
+        let dateObj: Date;
+        
+        if (typeof reading.timestamp === 'string') {
+          dateObj = new Date(reading.timestamp);
+        } else if (reading.timestamp && typeof reading.timestamp === 'object' && 'getTime' in reading.timestamp) {
+          dateObj = reading.timestamp as Date;
+        } else {
+          dateObj = new Date(reading.timestamp as any);
+        }
+        
+        // Keep database timestamp formatting without timezone conversion
+        // This displays the time exactly as stored in the database
+        const dbTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+        const displayTime = formatInTimeZone(dateObj, 'UTC', 'HH:mm:ss');
+        
+        return {
+          timestamp: dbTime,
+          displayTime: displayTime,
+          temperature: reading.temperature,
+          humidity: reading.humidity,
+          originalTimestamp: reading.timestamp,
+          date: dateObj,
+        };
+      })
+      .sort((a, b) => a.date.getTime() - b.date.getTime()); // Sort by timestamp
   
-  if (dateMode === 'latest') {
-    // For latest mode, just take the last N readings
-    filteredData = chartData.slice(-limit);
-  } else if (dateMode === 'daily') {
-    // For daily mode, we'll show all data as it's already filtered by parent component
-    filteredData = chartData;
-  } else if (dateMode === 'range') {
-    // For range mode, we'll show all data as it's already filtered by parent component
-    filteredData = chartData;
-  }
+    // Apply proper data filtering based on mode
+    let filteredData = processedData;
+    
+    if (dateMode === 'latest') {
+      // For latest mode, just take the last N readings
+      filteredData = processedData.slice(-limit);
+    } else if (dateMode === 'daily') {
+      // For daily mode, we'll show all data as it's already filtered by parent component
+      filteredData = processedData;
+    } else if (dateMode === 'range') {
+      // For range mode, we'll show all data as it's already filtered by parent component
+      filteredData = processedData;
+    }
 
-  console.log('DeviceColumnChart filtered data:', filteredData);
+    console.log('DeviceColumnChart filtered data:', filteredData);
+    setChartData(filteredData);
+  }, [data, dateMode, limit]);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart
-        data={filteredData}
+        data={chartData}
         margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
       >
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />

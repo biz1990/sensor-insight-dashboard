@@ -52,7 +52,13 @@ const Register = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const success = await registerUser(values.username, values.email, values.password);
     if (success) {
-      navigate('/login');
+      // Navigate to login with state information to show a message and pre-fill email
+      navigate('/login', { 
+        state: { 
+          fromRegistration: true,
+          email: values.email
+        }
+      });
     }
   };
 

@@ -23,6 +23,8 @@ interface ConnectedScatterChartProps {
   height?: number;
   limit?: number;
   dateMode?: 'latest' | 'daily' | 'range';
+  autoRefresh?: boolean;
+  refreshInterval?: number;
 }
 
 const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({ 
@@ -30,64 +32,72 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
   compareType, 
   height = 400,
   limit = 10,
-  dateMode = 'latest'
+  dateMode = 'latest',
+  autoRefresh = true,
+  refreshInterval = 30000
 }) => {
-  // Group readings by deviceId
-  const deviceReadings = data.reduce<Record<number, SensorReading[]>>((acc, reading) => {
-    if (!acc[reading.deviceId]) {
-      acc[reading.deviceId] = [];
-    }
-    acc[reading.deviceId].push(reading);
-    return acc;
-  }, {});
+  const [chartData, setChartData] = React.useState<any[]>([]);
+  
+  // Process and filter data whenever it changes
+  React.useEffect(() => {
+    // Group readings by deviceId
+    const deviceReadings = data.reduce<Record<number, SensorReading[]>>((acc, reading) => {
+      if (!acc[reading.deviceId]) {
+        acc[reading.deviceId] = [];
+      }
+      acc[reading.deviceId].push(reading);
+      return acc;
+    }, {});
 
-  // Process data for scatter plot with accurate timestamp handling
-  const scatterData = Object.entries(deviceReadings).map(([deviceId, readings]) => {
-    // First sort readings by timestamp
-    const sortedReadings = [...readings].sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      return timeA - timeB;
-    });
-    
-    // Apply filtering based on dateMode
-    let filteredReadings = sortedReadings;
-    if (dateMode === 'latest') {
-      filteredReadings = sortedReadings.slice(-limit);
-    }
-    // For daily and range, we assume the data has already been filtered by parent component
-    
-    return {
-      id: deviceId,
-      name: `Device ${deviceId}`,
-      data: filteredReadings.map(r => {
-        // Handle timestamp properly based on its type without converting to local timezone
-        let dateObj: Date;
-        
-        if (typeof r.timestamp === 'string') {
-          dateObj = new Date(r.timestamp);
-        } else if (r.timestamp && typeof r.timestamp === 'object' && 'getTime' in r.timestamp) {
-          dateObj = r.timestamp as Date;
-        } else {
-          dateObj = new Date(r.timestamp as any);
-        }
-        
-        // Format time using database time format without timezone conversion
-        const formattedTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+    // Process data for scatter plot with accurate timestamp handling
+    const scatterData = Object.entries(deviceReadings).map(([deviceId, readings]) => {
+      // First sort readings by timestamp
+      const sortedReadings = [...readings].sort((a, b) => {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      });
+      
+      // Apply filtering based on dateMode
+      let filteredReadings = sortedReadings;
+      if (dateMode === 'latest') {
+        filteredReadings = sortedReadings.slice(-limit);
+      }
+      // For daily and range, we assume the data has already been filtered by parent component
+      
+      return {
+        id: deviceId,
+        name: `Device ${deviceId}`,
+        data: filteredReadings.map(r => {
+          // Handle timestamp properly based on its type without converting to local timezone
+          let dateObj: Date;
           
-        return {
-          x: dateObj.getTime(),
-          y: compareType === 'temperature' ? r.temperature : r.humidity,
-          temperature: r.temperature,
-          humidity: r.humidity,
-          timestamp: r.timestamp,
-          formattedTime: formattedTime,
-        };
-      }).sort((a, b) => a.x - b.x), // Sort by timestamp
-    };
-  });
+          if (typeof r.timestamp === 'string') {
+            dateObj = new Date(r.timestamp);
+          } else if (r.timestamp && typeof r.timestamp === 'object' && 'getTime' in r.timestamp) {
+            dateObj = r.timestamp as Date;
+          } else {
+            dateObj = new Date(r.timestamp as any);
+          }
+          
+          // Format time using database time format without timezone conversion
+          const formattedTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+            
+          return {
+            x: dateObj.getTime(),
+            y: compareType === 'temperature' ? r.temperature : r.humidity,
+            temperature: r.temperature,
+            humidity: r.humidity,
+            timestamp: r.timestamp,
+            formattedTime: formattedTime,
+          };
+        }).sort((a, b) => a.x - b.x), // Sort by timestamp
+      };
+    });
 
-  console.log('ConnectedScatterChart data:', scatterData);
+    console.log('ConnectedScatterChart data:', scatterData);
+    setChartData(scatterData);
+  }, [data, compareType, dateMode, limit]);
 
   // Generate colors for different devices
   const generateColor = (index: number) => {
@@ -140,7 +150,7 @@ const ConnectedScatterChart: React.FC<ConnectedScatterChartProps> = ({
         />
         <Legend />
         
-        {scatterData.map((device, index) => (
+        {chartData.map((device, index) => (
           <React.Fragment key={device.id}>
             <Scatter
               name={device.name}
