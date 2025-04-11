@@ -24,4 +24,8 @@ router.delete('/:id', deviceController.deleteDevice);
 // GET sensor readings for a device
 router.get('/:id/readings', deviceController.getDeviceReadings);
 
+router.get('/:id/readings/latest', deviceController.getLatestReadings);
+router.get('/:id/readings/daily', deviceController.getDailyReadings);
+router.get('/:id/readings/range', deviceController.getRangeReadings);
+
 module.exports = router;
