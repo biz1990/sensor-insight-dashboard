@@ -3,19 +3,64 @@ const sql = require('mssql');
 const { sqlConfig } = require('../config/db');
 
 // Get all devices
+// exports.getAllDevices = async (req, res) => {
+//   try {
+//     const pool = await sql.connect(sqlConfig);
+//     const result = await pool.request().query(`
+//       SELECT d.*, l.name as locationName 
+//       FROM Devices d 
+//       LEFT JOIN DeviceLocations l ON d.locationId = l.id
+//     `);
+    
+//     res.json({
+//       success: true,
+//       message: 'Devices retrieved successfully',
+//       data: result.recordset
+//     });
+//   } catch (error) {
+//     console.error('Error getting devices:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to retrieve devices',
+//       error: error.message
+//     });
+//   }
+// };
+
+// Get all devices
 exports.getAllDevices = async (req, res) => {
   try {
     const pool = await sql.connect(sqlConfig);
     const result = await pool.request().query(`
-      SELECT d.*, l.name as locationName 
+      SELECT 
+        d.*, 
+        l.id AS locationId,
+        l.name AS locationName,
+        l.description AS locationDescription
       FROM Devices d 
       LEFT JOIN DeviceLocations l ON d.locationId = l.id
     `);
-    
+
+    // Convert flat data to nested structure
+    const devices = result.recordset.map(device => ({
+      id: device.id,
+      name: device.name,
+      serialNumber: device.serialNumber,
+      status: device.status,
+      createdAt: device.createdAt,
+      updatedAt: device.updatedAt,
+      locationId: device.locationId,
+      location: device.locationId ? {
+        id: device.locationId,
+        name: device.locationName,
+        description: device.locationDescription
+      } : null
+    }));
+
     res.json({
       success: true,
       message: 'Devices retrieved successfully',
-      data: result.recordset
+      data: devices
     });
   } catch (error) {
     console.error('Error getting devices:', error);
@@ -437,4 +482,83 @@ exports.getDeviceReadings = async (req, res) => {
     });
   }
 };
+
+exports.getLatestReadings = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await sql.connect(sqlConfig);
+
+    const result = await pool.request()
+      .input('deviceId', sql.Int, id)
+      .query(`
+        SELECT TOP 10 *
+        FROM SensorReadings
+        WHERE deviceId = @deviceId
+        ORDER BY timestamp DESC
+      `);
+
+    res.json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error('Error getting latest readings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+exports.getDailyReadings = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const pool = await sql.connect(sqlConfig);
+
+    const result = await pool.request()
+      .input('deviceId', sql.Int, id)
+      .input('startTime', sql.DateTime, today)
+      .input('endTime', sql.DateTime, tomorrow)
+      .query(`
+        SELECT *
+        FROM SensorReadings
+        WHERE deviceId = @deviceId
+          AND timestamp >= @startTime AND timestamp < @endTime
+        ORDER BY timestamp ASC
+      `);
+
+    res.json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error('Error getting daily readings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+exports.getRangeReadings = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { from, to } = req.query;
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+
+    const pool = await sql.connect(sqlConfig);
+
+    const result = await pool.request()
+      .input('deviceId', sql.Int, id)
+      .input('startTime', sql.DateTime, fromDate)
+      .input('endTime', sql.DateTime, toDate)
+      .query(`
+        SELECT *
+        FROM SensorReadings
+        WHERE deviceId = @deviceId
+          AND timestamp BETWEEN @startTime AND @endTime
+        ORDER BY timestamp ASC
+      `);
+
+    res.json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error('Error getting range readings:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 
