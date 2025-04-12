@@ -1,31 +1,7 @@
-
 const sql = require('mssql');
 const { sqlConfig } = require('../config/db');
 
-// Get all devices
-// exports.getAllDevices = async (req, res) => {
-//   try {
-//     const pool = await sql.connect(sqlConfig);
-//     const result = await pool.request().query(`
-//       SELECT d.*, l.name as locationName 
-//       FROM Devices d 
-//       LEFT JOIN DeviceLocations l ON d.locationId = l.id
-//     `);
-    
-//     res.json({
-//       success: true,
-//       message: 'Devices retrieved successfully',
-//       data: result.recordset
-//     });
-//   } catch (error) {
-//     console.error('Error getting devices:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to retrieve devices',
-//       error: error.message
-//     });
-//   }
-// };
+// Existing controller functions remain the same...
 
 // Get all devices
 exports.getAllDevices = async (req, res) => {
@@ -483,10 +459,23 @@ exports.getDeviceReadings = async (req, res) => {
   }
 };
 
+// Get latest readings (10 most recent readings)
 exports.getLatestReadings = async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await sql.connect(sqlConfig);
+
+    // Check if device exists
+    const deviceCheck = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT * FROM Devices WHERE id = @id');
+      
+    if (deviceCheck.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Device with ID ${id} not found`
+      });
+    }
 
     const result = await pool.request()
       .input('deviceId', sql.Int, id)
@@ -497,21 +486,44 @@ exports.getLatestReadings = async (req, res) => {
         ORDER BY timestamp DESC
       `);
 
-    res.json({ success: true, data: result.recordset });
+    res.json({ 
+      success: true, 
+      message: `Latest 10 readings for device ${id} retrieved successfully`,
+      data: result.recordset 
+    });
   } catch (error) {
     console.error('Error getting latest readings:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to retrieve latest readings',
+      error: error.message 
+    });
   }
 };
+
+// Get daily readings (readings from the current day)
 exports.getDailyReadings = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Check if device exists
+    const pool = await sql.connect(sqlConfig);
+    const deviceCheck = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT * FROM Devices WHERE id = @id');
+      
+    if (deviceCheck.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Device with ID ${id} not found`
+      });
+    }
+    
+    // Get today's date boundaries in local timezone
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
-
-    const pool = await sql.connect(sqlConfig);
 
     const result = await pool.request()
       .input('deviceId', sql.Int, id)
@@ -525,22 +537,65 @@ exports.getDailyReadings = async (req, res) => {
         ORDER BY timestamp ASC
       `);
 
-    res.json({ success: true, data: result.recordset });
+    res.json({ 
+      success: true, 
+      message: `Daily readings for device ${id} retrieved successfully`,
+      data: result.recordset 
+    });
   } catch (error) {
     console.error('Error getting daily readings:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to retrieve daily readings',
+      error: error.message 
+    });
   }
 };
+
+// Get readings for a date range
 exports.getRangeReadings = async (req, res) => {
   try {
     const { id } = req.params;
     const { from, to } = req.query;
 
-    const fromDate = new Date(from);
-    const toDate = new Date(to);
-    toDate.setHours(23, 59, 59, 999);
+    if (!from || !to) {
+      return res.status(400).json({
+        success: false,
+        message: 'Both from and to dates are required'
+      });
+    }
 
+    // Check if device exists
     const pool = await sql.connect(sqlConfig);
+    const deviceCheck = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT * FROM Devices WHERE id = @id');
+      
+    if (deviceCheck.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Device with ID ${id} not found`
+      });
+    }
+
+    // Parse and validate dates
+    let fromDate, toDate;
+    try {
+      fromDate = new Date(from);
+      toDate = new Date(to);
+      
+      // Set end time to end of day
+      toDate.setHours(23, 59, 59, 999);
+      
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        throw new Error('Invalid date format');
+      }
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use YYYY-MM-DD format.'
+      });
+    }
 
     const result = await pool.request()
       .input('deviceId', sql.Int, id)
@@ -554,11 +609,17 @@ exports.getRangeReadings = async (req, res) => {
         ORDER BY timestamp ASC
       `);
 
-    res.json({ success: true, data: result.recordset });
+    res.json({ 
+      success: true, 
+      message: `Readings for device ${id} from ${from} to ${to} retrieved successfully`,
+      data: result.recordset 
+    });
   } catch (error) {
     console.error('Error getting range readings:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to retrieve readings for the selected date range',
+      error: error.message 
+    });
   }
 };
-
-
