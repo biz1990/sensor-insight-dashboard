@@ -17,35 +17,55 @@ import { getDeviceReadings, getDevices, getWarningThresholds } from '@/services/
 import { useToast } from '@/hooks/use-toast';
 import { Device, SensorReading } from '@/types';
 
+// Types for chart date mode
+type ChartDateMode = 'latest' | 'daily' | 'range';
+
 const DeviceDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const deviceId = id ? parseInt(id) : null;
+  const deviceIdRef = useRef<number | null>(deviceId);
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // State management
   const [device, setDevice] = useState<Device | undefined>(undefined);
   const [readings, setReadings] = useState<SensorReading[]>([]);
   const [latestReading, setLatestReading] = useState<SensorReading | null>(null);
+  const [thresholds, setThresholds] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  
+  // Date and view settings
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [activeTab, setActiveTab] = useState('daily');
-  //const [chartDateMode, setChartDateMode] = useState('latest');
-  const [chartDateMode, setChartDateMode] = useState<'latest' | 'daily' | 'range'>('latest');
-  const { toast } = useToast();
-  const [thresholds, setThresholds] = useState<any>(null);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [activeTab, setActiveTab] = useState('latest');
+  const [chartDateMode, setChartDateMode] = useState<ChartDateMode>('latest');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval] = useState(30000); // 30 seconds
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const deviceIdRef = useRef<number | null>(null);
 
-  // Set device ID reference
-  useEffect(() => {
-    if (id) {
-      deviceIdRef.current = parseInt(id);
+  // Format timestamp from database
+  const formatDBTimestamp = (timestamp: string | Date): string => {
+    try {
+      const date = new Date(timestamp);
+      return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+    } catch (e) {
+      console.error('Error formatting timestamp:', e);
+      return 'Unknown';
     }
-  }, [id]);
+  };
 
-  // Fetch thresholds
+  // Helper to filter readings by the selected date
+  const filterReadingsByDate = (readings: SensorReading[], date: Date): SensorReading[] => {
+    const selectedDateStr = format(date, 'yyyy-MM-dd');
+    return readings.filter((reading) => {
+      const readingDate = format(new Date(reading.timestamp), 'yyyy-MM-dd');
+      return readingDate === selectedDateStr;
+    });
+  };
+
+  // Fetch warning thresholds
   const fetchThresholds = useCallback(async () => {
     try {
       const thresholdsData = await getWarningThresholds();
@@ -61,6 +81,7 @@ const DeviceDetail = () => {
     try {
       const devices = await getDevices();
       const fetchedDevice = devices.find(d => d.id === deviceId);
+      
       if (fetchedDevice) {
         setDevice(fetchedDevice);
         return true;
@@ -100,86 +121,71 @@ const DeviceDetail = () => {
     }
   }, []);
 
-  // Fetch daily data (last 24 readings)
-  const fetchDailyData = useCallback(async (deviceId: number) => {
+  // Fetch readings based on mode
+  const fetchReadings = useCallback(async (deviceId: number, mode: ChartDateMode, dateRange?: DateRange) => {
+    if (!deviceId) return;
+    
     setIsRefreshing(true);
     try {
-      const deviceReadings = await getDeviceReadings(deviceId, 24);
+      let deviceReadings: SensorReading[] = [];
+      
+      switch (mode) {
+        case 'latest':
+          deviceReadings = await getDeviceReadings(deviceId, 24);
+          setChartDateMode('latest');
+          break;
+        case 'daily':
+          // Get readings for past 24 hours, but filter them by the selected date
+          const allReadings = await getDeviceReadings(deviceId, 24 * 7); // Get a week's worth of data
+          deviceReadings = filterReadingsByDate(allReadings, selectedDate);
+          setChartDateMode('daily');
+          break;
+        case 'range':
+          if (dateRange?.from && dateRange?.to) {
+            const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            deviceReadings = await getDeviceReadings(deviceId, diffDays * 24);
+            setChartDateMode('range');
+          }
+          break;
+      }
+      
       setReadings(deviceReadings);
       setLastUpdated(new Date());
-      setChartDateMode('daily');
+      
     } catch (error) {
-      console.error('Error fetching readings:', error);
+      console.error(`Error fetching ${mode} readings:`, error);
       toast({
         title: "Error",
-        description: "Failed to load sensor readings",
+        description: `Failed to load sensor readings for ${mode} view`,
         variant: "destructive",
       });
     } finally {
       setIsRefreshing(false);
     }
-  }, [toast]);
-
-  // Fetch latest data (last 24 readings)
-  const fetchLatestData = useCallback(async (deviceId: number) => {
-    setIsRefreshing(true);
-    try {
-      const deviceReadings = await getDeviceReadings(deviceId, 24);
-      setReadings(deviceReadings);
-      setLastUpdated(new Date());
-      setChartDateMode('latest');
-    } catch (error) {
-      console.error('Error fetching latest readings:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load latest sensor readings",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [toast]);
-
-  // Fetch range data
-  const fetchRangeData = useCallback(async (deviceId: number, start: Date, end: Date) => {
-    setIsRefreshing(true);
-    try {
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      const deviceReadings = await getDeviceReadings(deviceId, diffDays * 24);
-      setReadings(deviceReadings);
-      setLastUpdated(new Date());
-      setChartDateMode('range');
-    } catch (error) {
-      console.error('Error fetching range readings:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load sensor readings for the selected date range",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [toast]);
+  }, [toast, selectedDate]);
 
   // Initial data load
   useEffect(() => {
-    if (id) {
-      const deviceId = parseInt(id);
-      fetchDevice(deviceId).then(success => {
-        if (success) {
-          fetchLatestReading(deviceId); // Fetch latest reading for real-time data
-          fetchLatestData(deviceId); // Fetch chart data
-        }
-      });
-      fetchThresholds();
-    }
+    if (!deviceId) return;
+    
+    const loadInitialData = async () => {
+      const success = await fetchDevice(deviceId);
+      if (success) {
+        await fetchLatestReading(deviceId);
+        await fetchReadings(deviceId, 'latest');
+        await fetchThresholds();
+      }
+    };
+    
+    loadInitialData();
+    
     return () => {
       if (refreshTimerRef.current) {
         clearInterval(refreshTimerRef.current);
       }
     };
-  }, [id, fetchDevice, fetchLatestReading, fetchLatestData, fetchThresholds]);
+  }, [deviceId, fetchDevice, fetchLatestReading, fetchReadings, fetchThresholds]);
 
   // Auto-refresh logic
   useEffect(() => {
@@ -191,14 +197,11 @@ const DeviceDetail = () => {
     if (!autoRefresh || !deviceIdRef.current) return;
 
     const refreshData = async () => {
-      await fetchLatestReading(deviceIdRef.current!); // Always fetch latest reading
-      if (chartDateMode === 'latest') {
-        await fetchLatestData(deviceIdRef.current!);
-      } else if (chartDateMode === 'daily') {
-        await fetchDailyData(deviceIdRef.current!);
-      } else if (chartDateMode === 'range' && dateRange?.from && dateRange?.to) {
-        await fetchRangeData(deviceIdRef.current!, dateRange.from, dateRange.to);
-      }
+      const currentDeviceId = deviceIdRef.current;
+      if (!currentDeviceId) return;
+      
+      await fetchLatestReading(currentDeviceId);
+      await fetchReadings(currentDeviceId, chartDateMode, dateRange);
       await fetchThresholds();
     };
 
@@ -210,42 +213,34 @@ const DeviceDetail = () => {
         clearInterval(refreshTimerRef.current);
       }
     };
-  }, [deviceIdRef, chartDateMode, dateRange, autoRefresh, refreshInterval, 
-      fetchLatestReading, fetchLatestData, fetchDailyData, fetchRangeData, fetchThresholds]);
+  }, [
+    deviceIdRef, chartDateMode, dateRange, autoRefresh, refreshInterval, 
+    fetchLatestReading, fetchReadings, fetchThresholds
+  ]);
 
   // Handle tab changes
   useEffect(() => {
     if (!deviceIdRef.current) return;
-    if (activeTab === 'daily') {
-      fetchDailyData(deviceIdRef.current);
+    
+    if (activeTab === 'latest') {
+      fetchReadings(deviceIdRef.current, 'latest');
+    } else if (activeTab === 'daily') {
+      fetchReadings(deviceIdRef.current, 'daily');
     } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
-      fetchRangeData(deviceIdRef.current, dateRange.from, dateRange.to);
+      fetchReadings(deviceIdRef.current, 'range', dateRange);
     }
-  }, [deviceIdRef, activeTab, dateRange, fetchDailyData, fetchRangeData]);
+  }, [deviceIdRef, activeTab, dateRange, fetchReadings]);
 
-  const formatDBTimestamp = (timestamp: string | Date) => {
-    try {
-      const date = new Date(timestamp);
-      return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss');
-    } catch (e) {
-      console.error('Error formatting timestamp:', e);
-      return 'Unknown';
-    }
-  };
-
+  // Manual refresh handler
   const handleRefresh = async () => {
     if (!deviceIdRef.current) return;
-    await fetchLatestReading(deviceIdRef.current); // Always fetch latest reading
-    if (activeTab === 'daily') {
-      await fetchDailyData(deviceIdRef.current);
-    } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
-      await fetchRangeData(deviceIdRef.current, dateRange.from, dateRange.to);
-    } else {
-      await fetchLatestData(deviceIdRef.current);
-    }
+    
+    await fetchLatestReading(deviceIdRef.current);
+    await fetchReadings(deviceIdRef.current, chartDateMode as ChartDateMode, dateRange);
     await fetchThresholds();
   };
 
+  // Toggle auto-refresh
   const toggleAutoRefresh = () => {
     setAutoRefresh(prev => !prev);
     toast({
@@ -256,6 +251,7 @@ const DeviceDetail = () => {
     });
   };
 
+  // Get appropriate badge for device status
   const getStatusBadge = (status: string) => {
     switch(status) {
       case 'online': return <Badge className="bg-green-500">Online</Badge>;
@@ -266,8 +262,10 @@ const DeviceDetail = () => {
     }
   };
 
+  // Export data to CSV
   const exportData = () => {
     if (!device || readings.length === 0) return;
+    
     const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)'];
     const csvContent = [
       headers.join(','),
@@ -277,6 +275,7 @@ const DeviceDetail = () => {
         reading.humidity
       ].join(','))
     ].join('\n');
+    
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -287,6 +286,7 @@ const DeviceDetail = () => {
     document.body.removeChild(link);
   };
 
+  // Show loading state
   if (isLoading) {
     return (
       <div className="text-center py-10">
@@ -296,6 +296,7 @@ const DeviceDetail = () => {
     );
   }
 
+  // Show error state if device not found
   if (!device) {
     return (
       <div className="text-center py-10">
@@ -309,6 +310,7 @@ const DeviceDetail = () => {
     );
   }
 
+  // Check for warnings
   const hasTemperatureWarning = latestReading && thresholds && 
     (latestReading.temperature < thresholds.minTemperature || 
      latestReading.temperature > thresholds.maxTemperature);
@@ -319,6 +321,7 @@ const DeviceDetail = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header with navigation and controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => navigate('/devices')}>
@@ -362,6 +365,7 @@ const DeviceDetail = () => {
         </div>
       </div>
       
+      {/* Warning alert */}
       {(hasTemperatureWarning || hasHumidityWarning) && (
         <Alert variant="warning">
           <AlertTriangle className="h-4 w-4" />
@@ -386,7 +390,9 @@ const DeviceDetail = () => {
         </Alert>
       )}
 
+      {/* Current readings summary cards */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        {/* Temperature Card */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
@@ -413,6 +419,7 @@ const DeviceDetail = () => {
           </CardContent>
         </Card>
         
+        {/* Humidity Card */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
@@ -439,6 +446,7 @@ const DeviceDetail = () => {
           </CardContent>
         </Card>
         
+        {/* Status Card */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
@@ -459,33 +467,31 @@ const DeviceDetail = () => {
         </Card>
       </div>
 
+      {/* Chart section */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle>Sensor Readings</CardTitle>
           <CardDescription>
-            {activeTab === 'daily' ? 'Daily temperature and humidity data' : 
-             activeTab === 'range' ? 'Custom date range temperature and humidity data' : 
-             'Last 10 temperature and humidity readings'}
+            {activeTab === 'latest' ? 'Last 10 temperature and humidity readings' :
+             activeTab === 'daily' ? 'Daily temperature and humidity data' : 
+             'Custom date range temperature and humidity data'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={(value) => {
-            const newTab = value;
-            setActiveTab(newTab);
-            if (newTab !== activeTab && deviceIdRef.current) {
-              if (newTab === 'daily') {
-                fetchDailyData(deviceIdRef.current);
-              } else if (newTab === 'range' && dateRange?.from && dateRange?.to) {
-                fetchRangeData(deviceIdRef.current, dateRange.from, dateRange.to);
-              }
-            }
-          }}>
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(value) => {
+              setActiveTab(value);
+            }}
+          >
             <div className="flex justify-between items-center mb-4 flex-wrap">
               <TabsList>
+                <TabsTrigger value="latest">Latest</TabsTrigger>
                 <TabsTrigger value="daily">Daily</TabsTrigger>
                 <TabsTrigger value="range">Date Range</TabsTrigger>
               </TabsList>
               
+              {/* Date picker for daily view */}
               {activeTab === 'daily' && (
                 <div className="flex items-center space-x-2 mt-2 sm:mt-0">
                   <Popover>
@@ -505,7 +511,7 @@ const DeviceDetail = () => {
                         onSelect={(date) => {
                           if (date && deviceIdRef.current) {
                             setSelectedDate(date);
-                            fetchDailyData(deviceIdRef.current);
+                            fetchReadings(deviceIdRef.current, 'daily');
                           }
                         }}
                         initialFocus
@@ -516,6 +522,7 @@ const DeviceDetail = () => {
                 </div>
               )}
               
+              {/* Date range picker */}
               {activeTab === 'range' && (
                 <div className="flex items-center space-x-2 mt-2 sm:mt-0">
                   <Popover>
@@ -528,8 +535,7 @@ const DeviceDetail = () => {
                         {dateRange?.from ? (
                           dateRange.to ? (
                             <>
-                              {format(dateRange.from, "PPP")} -{" "}
-                              {format(dateRange.to, "PPP")}
+                              {format(dateRange.from, "PPP")} - {format(dateRange.to, "PPP")}
                             </>
                           ) : (
                             format(dateRange.from, "PPP")
@@ -547,7 +553,7 @@ const DeviceDetail = () => {
                         onSelect={(newRange) => {
                           setDateRange(newRange);
                           if (newRange?.from && newRange?.to && deviceIdRef.current) {
-                            fetchRangeData(deviceIdRef.current, newRange.from, newRange.to);
+                            fetchReadings(deviceIdRef.current, 'range', newRange);
                           }
                         }}
                         numberOfMonths={2}
@@ -558,6 +564,7 @@ const DeviceDetail = () => {
               )}
             </div>
             
+            {/* Chart display area */}
             <div className="pt-4">
               {isRefreshing && (
                 <div className="text-center mb-2">
