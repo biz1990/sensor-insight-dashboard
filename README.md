@@ -1,22 +1,102 @@
-# Welcome to your Lovable project
+# Sensor Insight Dashboard
 
-## Project info
+A dashboard for monitoring sensor data with authentication and real-time updates.
 
-**URL**: https://lovable.dev/projects/f64ff0ba-aa9e-4469-8e96-20b8c455ec02
+## Quick Start
 
-## How can I edit this code?
+1. **Start the application**
 
-There are several ways of editing your application.
+   On Windows, double-click the `start-windows.bat` file or run:
+   ```
+   npm run server
+   ```
+   in one terminal, and
+   ```
+   npm run dev
+   ```
+   in another terminal.
 
-**Use Lovable**
+2. **Access the dashboard**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/f64ff0ba-aa9e-4469-8e96-20b8c455ec02) and start prompting.
+   Open your browser and go to:
+   ```
+   http://localhost:8080
+   ```
 
-Changes made via Lovable will be committed automatically to this repo.
+For more detailed instructions, see the [QUICK_START.md](QUICK_START.md) guide.
 
-**Use your preferred IDE**
+## Network Setup
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+To allow other computers on your network to access the dashboard:
+
+1. Run the network test utility to see available IP addresses:
+   ```
+   npm run network-test
+   ```
+
+2. Other computers can access the dashboard using your computer's IP address:
+   ```
+   http://your-ip-address:8080
+   ```
+
+For detailed network setup instructions, see [NETWORK_SETUP.md](NETWORK_SETUP.md).
+
+## Development
+
+- Frontend: React with TypeScript and Shadcn UI
+- Backend: Express.js with SQL Server database
+- Authentication: JWT-based authentication system
+- Weather Data: Open-Meteo API integration
+- Charts: Recharts for data visualization
+
+## Test Dashboard
+
+A test dashboard is available at `/test` that demonstrates the functionality with simulated data. This is useful for:
+
+- Testing the UI without connecting to real sensors
+- Demonstrating the dashboard to stakeholders
+- Development and debugging
+- Testing the multi-location weather widget
+
+## Configuration
+
+### Server Configuration
+
+Edit the `config.js` file to customize server settings:
+```javascript
+const serverConfig = {
+  port: 3001,
+  host: '0.0.0.0',
+  database: {
+    // Database settings
+  }
+};
+```
+
+### Weather Widgets
+
+The dashboard includes two weather widget options:
+
+#### Single Location Weather Widget
+
+- Display current temperature and conditions for a single location
+- Show hourly forecast for the next 8 hours
+- Select from predefined global locations
+- Uses the free Open-Meteo API (no API key required)
+- Auto-refreshes every 30 minutes
+
+#### Multi-Location Weather Widget
+
+- Monitor weather conditions across multiple global locations simultaneously
+- Add or remove locations as needed (up to 6 locations)
+- View current conditions and hourly forecasts for each location
+- Each location displays in its local timezone
+- Perfect for organizations with multiple facilities around the world
+
+The dashboard also includes an Indoor Climate Summary that shows:
+- Average temperature and humidity across all sensors
+- Min/max ranges for your indoor readings
+- Visual indicators for readings outside recommended ranges
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 

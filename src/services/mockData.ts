@@ -69,6 +69,7 @@ export const mockUsers: User[] = [
   { id: 1, username: 'admin', email: 'admin@example.com', role: 'admin', isActive: true, createdAt: '2023-01-01', updatedAt: '2023-01-01' },
   { id: 2, username: 'user1', email: 'user1@example.com', role: 'user', isActive: true, createdAt: '2023-01-02', updatedAt: '2023-01-02' },
   { id: 3, username: 'user2', email: 'user2@example.com', role: 'user', isActive: false, createdAt: '2023-01-03', updatedAt: '2023-01-03' },
+  { id: 9, username: 'trunghau', email: 'phitruongtrolai@yahoo.com.vn', role: 'admin', isActive: true, createdAt: '2023-04-15', updatedAt: '2023-04-15' },
 ];
 
 // Mock warning thresholds

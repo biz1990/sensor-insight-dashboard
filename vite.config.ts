@@ -9,6 +9,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/api': {
+        target: 'http://192.168.190.131:3001',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   plugins: [
     react(),
@@ -22,7 +29,7 @@ export default defineConfig(({ mode }) => ({
   },
   define: {
     // Provide fallbacks for process.env to work with Vite
-    'import.meta.env.VITE_DB_API_URL': JSON.stringify(process.env.VITE_DB_API_URL || 'http://localhost:3001/api'),
+    'import.meta.env.VITE_DB_API_URL': JSON.stringify(process.env.VITE_DB_API_URL || 'http://192.168.190.131:3001/api'),
     'import.meta.env.VITE_USE_REAL_API': JSON.stringify(process.env.VITE_USE_REAL_API || false),
   },
 }));

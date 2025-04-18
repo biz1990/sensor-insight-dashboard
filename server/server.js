@@ -1,20 +1,52 @@
 
+// Create a local config file for the server
+const serverConfig = {
+  // The port the server will listen on
+  port: 3001,
+  
+  // The hostname or IP address where the server is running
+  // Use 0.0.0.0 to listen on all interfaces
+  host: '0.0.0.0',
+  
+  // Database configuration
+  database: {
+    server: '192.168.191.115',  // SQL Server hostname or IP
+    database: 'SensorDB', // Database name
+    user: 'user1',           // SQL Server username
+    password: '12345678', // SQL Server password
+    port: 1433,           // SQL Server port
+    options: {
+      encrypt: false,
+      trustServerCertificate: true
+    }
+  }
+};
+
 const express = require('express');
 const cors = require('cors');
 const sql = require('mssql');
 const dotenv = require('dotenv');
 const apiRoutes = require('./routes');
+const errorHandler = require('./middleware/errorHandler');
 const { sqlConfig } = require('./config/db');
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || serverConfig.port || 3001;
+const HOST = process.env.HOST || serverConfig.host || '0.0.0.0';
 
 // Middleware
-app.use(cors());
+// Configure CORS to allow requests from any origin
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(__dirname + '/public'));
 
 // Test database connection on server start
 (async function testInitialConnection() {
@@ -48,9 +80,21 @@ app.use(express.json());
 // Mount API routes at /api
 app.use('/api', apiRoutes);
 
+// Error handling middleware (must be after routes)
+app.use(errorHandler);
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
 // Start the server
-app.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`API server running on ${HOST}:${PORT}`);
+  console.log(`Access the API at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/api`);
 });
 
 // Handle process termination

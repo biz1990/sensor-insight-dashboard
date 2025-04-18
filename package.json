@@ -1,14 +1,18 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "sensor-insight-dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "cd server && node server.js",
+    "network-test": "cd server && node utils/networkTest.js",
+    "start": "node start.js",
+    "fix-modules": "node fix-modules.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -41,6 +45,7 @@
     "@radix-ui/react-tooltip": "^1.1.4",
     "@tanstack/react-query": "^5.56.2",
     "@types/mssql": "^9.1.7",
+    "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -51,6 +56,7 @@
     "lucide-react": "^0.462.0",
     "mssql": "^11.0.1",
     "next-themes": "^0.3.0",
+    "openmeteo": "^1.2.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",

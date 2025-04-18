@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,29 +25,47 @@ import {
 } from '@/components/ui/form';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
+import { Loader2, LogIn } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  rememberMe: z.boolean().default(false),
 });
 
 const Login = () => {
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Get the return URL from location state or default to dashboard
+  const returnUrl = (location.state as any)?.from?.pathname || '/dashboard';
   
   // Check if we're coming from registration
   const fromRegistration = location.state?.fromRegistration || false;
   const registeredEmail = location.state?.email || '';
 
+  // Get remembered email from localStorage if available
+  const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: registeredEmail || '',
+      email: registeredEmail || rememberedEmail || '',
       password: '',
+      rememberMe: !!rememberedEmail,
     },
   });
+  
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      navigate(returnUrl);
+    }
+  }, [isAuthenticated, isLoading, navigate, returnUrl]);
   
   // Show toast when arriving from registration
   useEffect(() => {
@@ -60,16 +78,41 @@ const Login = () => {
   }, [fromRegistration, registeredEmail, toast]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    const success = await login(values.email, values.password);
-    if (success) {
-      navigate('/dashboard');
+    setIsSubmitting(true);
+    
+    try {
+      // Handle "remember me" functionality
+      if (values.rememberMe) {
+        localStorage.setItem('rememberedEmail', values.email);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+      }
+      
+      const success = await login(values.email, values.password);
+      if (success) {
+        navigate(returnUrl);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  // If already authenticated and not loading, don't render the form
+  if (isAuthenticated && !isLoading) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted">
       <div className="w-full max-w-md p-6">
-        <Card>
+        <Card className="shadow-lg">
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl font-bold">Sensor Insight Dashboard</CardTitle>
             <CardDescription>Enter your credentials to access the dashboard</CardDescription>
@@ -84,7 +127,13 @@ const Login = () => {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="email@example.com" {...field} />
+                        <Input 
+                          placeholder="email@example.com" 
+                          {...field} 
+                          autoComplete="email"
+                          disabled={isSubmitting}
+                          autoFocus={!field.value}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -97,9 +146,34 @@ const Login = () => {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" {...field} />
+                        <Input 
+                          type="password" 
+                          placeholder="••••••••" 
+                          {...field} 
+                          autoComplete="current-password"
+                          disabled={isSubmitting}
+                          autoFocus={!!form.getValues().email && !form.getValues().password}
+                        />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="rememberMe"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Remember my email</FormLabel>
+                      </div>
                     </FormItem>
                   )}
                 />
@@ -108,13 +182,23 @@ const Login = () => {
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading}
+                  disabled={isSubmitting}
                 >
-                  {isLoading ? 'Signing in...' : 'Sign in'}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Sign in
+                    </>
+                  )}
                 </Button>
                 <div className="text-center text-sm">
                   Don't have an account?{' '}
-                  <Link to="/register" className="text-primary hover:underline">
+                  <Link to="/register" className="text-primary hover:underline font-medium">
                     Register
                   </Link>
                 </div>

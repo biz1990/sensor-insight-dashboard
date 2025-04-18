@@ -48,10 +48,14 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({
           dateObj = new Date(reading.timestamp as any);
         }
         
-        // Keep database timestamp formatting without timezone conversion
-        // This displays the time exactly as stored in the database
+        // Format time using UTC to prevent automatic timezone conversion
+        // For database timestamp, include full date and time
         const dbTime = formatInTimeZone(dateObj, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+        // For display in chart, only show the time portion for better readability
         const displayTime = formatInTimeZone(dateObj, 'UTC', 'HH:mm:ss');
+        
+        // Log for debugging
+        console.log(`Processing reading: Original=${reading.timestamp}, Parsed=${dateObj.toISOString()}, Display=${displayTime}`);
         
         return {
           timestamp: dbTime,
@@ -71,14 +75,29 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({
       // For latest mode, just take the last N readings
       filteredData = processedData.slice(-limit);
     } else if (dateMode === 'daily') {
-      // For daily mode, we'll show all data as it's already filtered by parent component
-      filteredData = processedData;
+      // For daily mode, ensure we're only showing today's data
+      // The data should already be filtered by parent component, but we'll double-check
+      
+      // Get today's date in UTC
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0); // 00:00:00 of today in UTC
+      
+      // Filter to ensure we only show readings from today
+      filteredData = processedData.filter(item => {
+        return item.date >= today;
+      });
+      
+      console.log(`DeviceColumnChart: Filtered to ${filteredData.length} readings for today`);
     } else if (dateMode === 'range') {
       // For range mode, we'll show all data as it's already filtered by parent component
       filteredData = processedData;
     }
 
     console.log('DeviceColumnChart filtered data:', filteredData);
+    console.log('DeviceColumnChart date mode:', dateMode);
+    console.log('First reading timestamp:', filteredData.length > 0 ? filteredData[0].timestamp : 'No data');
+    console.log('Last reading timestamp:', filteredData.length > 0 ? filteredData[filteredData.length - 1].timestamp : 'No data');
+    
     setChartData(filteredData);
   }, [data, dateMode, limit]);
 
@@ -92,6 +111,8 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({
         <XAxis
           dataKey="displayTime"
           tick={{ fontSize: 12 }}
+          label={{ value: 'Time (UTC)', position: 'insideBottom', offset: -5 }}
+          interval={dateMode === 'daily' ? 2 : 0} // Show fewer ticks for daily mode
         />
         <YAxis
           yAxisId="temperature"
@@ -115,6 +136,7 @@ const DeviceColumnChart: React.FC<DeviceColumnChartProps> = ({
               return (
                 <div className="bg-background border rounded p-2 shadow-md">
                   <p className="text-sm font-medium">{data.timestamp}</p>
+                  <p className="text-xs text-muted-foreground">Time (UTC): {data.displayTime}</p>
                   <p className="text-sm text-[#FF6B6B]">Temperature: {data.temperature}°C</p>
                   <p className="text-sm text-[#4ECDC4]">Humidity: {data.humidity}%</p>
                 </div>

@@ -519,11 +519,15 @@ exports.getDailyReadings = async (req, res) => {
       });
     }
     
-    // Get today's date boundaries in local timezone
+    // Get today's date boundaries in UTC
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0); // Set to start of day in UTC
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+    tomorrow.setUTCDate(today.getUTCDate() + 1); // Set to start of next day in UTC
+
+    console.log('Fetching daily readings with UTC boundaries:');
+    console.log('Start time (UTC):', today.toISOString());
+    console.log('End time (UTC):', tomorrow.toISOString());
 
     const result = await pool.request()
       .input('deviceId', sql.Int, id)
@@ -536,6 +540,14 @@ exports.getDailyReadings = async (req, res) => {
           AND timestamp >= @startTime AND timestamp < @endTime
         ORDER BY timestamp ASC
       `);
+
+    console.log(`Found ${result.recordset.length} readings for today in UTC`);
+    
+    // Log the first and last reading timestamps if available
+    if (result.recordset.length > 0) {
+      console.log('First reading timestamp:', new Date(result.recordset[0].timestamp).toISOString());
+      console.log('Last reading timestamp:', new Date(result.recordset[result.recordset.length - 1].timestamp).toISOString());
+    }
 
     res.json({ 
       success: true, 

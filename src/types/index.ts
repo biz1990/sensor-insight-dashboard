@@ -67,3 +67,22 @@ export interface DbConnection {
   lastConnectedAt?: string;
   config: DatabaseConfig;
 }
+
+export interface WeatherData {
+  current: {
+    time: Date;
+    temperature2m: number;
+  };
+  hourly: {
+    time: Date[];
+    temperature2m: number[];
+    relativeHumidity2m: number[];
+  };
+}
+
+export interface WeatherLocation {
+  name: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+}

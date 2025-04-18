@@ -1,9 +1,12 @@
 
 import { getDbConfig } from '@/utils/dbConfig';
 import { DeviceLocation, Device, User, WarningThreshold, SensorReading } from '@/types';
+import { format } from 'date-fns';
 
 // This is the proxy API endpoint that handles database operations
-const DB_API_URL = import.meta.env.VITE_DB_API_URL || 'http://localhost:3001/api';
+// If it's a relative URL, we'll use the current origin
+const apiUrl = import.meta.env.VITE_DB_API_URL || '/api';
+const DB_API_URL = apiUrl.startsWith('http') ? apiUrl : `${window.location.origin}${apiUrl}`;
 
 // Flag to determine if we should use mock data or try the real API
 // Set to true to always try the real API first
@@ -343,6 +346,47 @@ export const deleteUser = async (userId: number): Promise<{ success: boolean; me
     };
   } catch (error) {
     console.error('Error deleting user:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generate a device report
+ */
+export const generateDeviceReport = async (
+  deviceId: number, 
+  startDate: Date, 
+  endDate: Date, 
+  interval: string = 'raw'
+): Promise<any> => {
+  try {
+    // Format dates in YYYY-MM-DD format
+    // We'll handle timezone conversion on the server side
+    const formattedStartDate = format(startDate, 'yyyy-MM-dd');
+    const formattedEndDate = format(endDate, 'yyyy-MM-dd');
+    
+    console.log(`Generating report for device ${deviceId} from ${formattedStartDate} to ${formattedEndDate}`);
+    
+    const result = await fetchApi(
+      `/reports/devices/${deviceId}?startDate=${formattedStartDate}&endDate=${formattedEndDate}&interval=${interval}`
+    );
+    
+    return result;
+  } catch (error) {
+    console.error('Error generating report:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get device statistics
+ */
+export const getDeviceStats = async (deviceId: number, period: string = 'day'): Promise<any> => {
+  try {
+    const result = await fetchApi(`/reports/devices/${deviceId}/stats?period=${period}`);
+    return result;
+  } catch (error) {
+    console.error('Error getting device statistics:', error);
     throw error;
   }
 };

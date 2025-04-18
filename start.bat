@@ -1,0 +1,3 @@
+@echo off
+echo Starting Sensor Insight Dashboard...
+npm run start

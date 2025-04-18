@@ -38,14 +38,19 @@ const DeviceDetail = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   
   // Date and view settings
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    // Initialize with current date in UTC
+    const today = new Date();
+    today.setUTCHours(12, 0, 0, 0); // Set to noon UTC to avoid timezone issues
+    return today;
+  });
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [activeTab, setActiveTab] = useState('latest');
   const [chartDateMode, setChartDateMode] = useState<ChartDateMode>('latest');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval] = useState(30000); // 30 seconds
 
-  // Format timestamp from database
+  // Format timestamp from database using UTC to prevent automatic timezone conversion
   const formatDBTimestamp = (timestamp: string | Date): string => {
     try {
       const date = new Date(timestamp);
@@ -56,12 +61,28 @@ const DeviceDetail = () => {
     }
   };
 
-  // Helper to filter readings by the selected date
+  // Helper to filter readings by the selected date using UTC
   const filterReadingsByDate = (readings: SensorReading[], date: Date): SensorReading[] => {
-    const selectedDateStr = format(date, 'yyyy-MM-dd');
+    // Create start and end boundaries for the selected date in UTC
+    const startOfDay = new Date(date);
+    startOfDay.setUTCHours(0, 0, 0, 0); // 00:00:00 of the selected day in UTC
+    
+    const endOfDay = new Date(date);
+    endOfDay.setUTCHours(23, 59, 59, 999); // 23:59:59 of the selected day in UTC
+    
+    console.log('Filtering readings for date:', formatInTimeZone(date, 'UTC', 'yyyy-MM-dd'));
+    console.log('Start of day (UTC):', formatInTimeZone(startOfDay, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+    console.log('End of day (UTC):', formatInTimeZone(endOfDay, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+    
     return readings.filter((reading) => {
-      const readingDate = format(new Date(reading.timestamp), 'yyyy-MM-dd');
-      return readingDate === selectedDateStr;
+      const readingDate = new Date(reading.timestamp);
+      const isInRange = readingDate >= startOfDay && readingDate <= endOfDay;
+      
+      if (isInRange) {
+        console.log('Including reading:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+      }
+      
+      return isInRange;
     });
   };
 
@@ -131,24 +152,201 @@ const DeviceDetail = () => {
       
       switch (mode) {
         case 'latest':
-          deviceReadings = await getDeviceReadings(deviceId, 24);
+          try {
+            // Use the specific endpoint for latest readings (10 most recent)
+            const result = await fetch(`${import.meta.env.VITE_DB_API_URL}/devices/${deviceId}/readings/latest`);
+            const data = await result.json();
+            if (data.success) {
+              deviceReadings = data.data;
+            } else {
+              // Fallback to regular endpoint if specific one fails
+              deviceReadings = await getDeviceReadings(deviceId, 24);
+              // Take only the 10 most recent readings
+              deviceReadings = deviceReadings.sort((a, b) => 
+                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+              ).slice(0, 10);
+            }
+          } catch (error) {
+            console.error('Error fetching latest readings, falling back:', error);
+            deviceReadings = await getDeviceReadings(deviceId, 24);
+            // Take only the 10 most recent readings
+            deviceReadings = deviceReadings.sort((a, b) => 
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            ).slice(0, 10);
+          }
           setChartDateMode('latest');
           break;
+          
         case 'daily':
-          // Get readings for past 24 hours, but filter them by the selected date
-          const allReadings = await getDeviceReadings(deviceId, 24 * 7); // Get a week's worth of data
-          deviceReadings = filterReadingsByDate(allReadings, selectedDate);
+          try {
+            console.log('Fetching daily readings for date:', formatInTimeZone(selectedDate, 'UTC', 'yyyy-MM-dd'));
+            
+            // Compare dates in UTC to check if selected date is today
+            const today = new Date();
+            const isToday = 
+              selectedDate.getUTCFullYear() === today.getUTCFullYear() &&
+              selectedDate.getUTCMonth() === today.getUTCMonth() &&
+              selectedDate.getUTCDate() === today.getUTCDate();
+            
+            if (isToday) {
+              // For today, we'll create a custom approach to ensure we get only today's data
+              console.log('Fetching today\'s readings with custom approach');
+              
+              // Create today's date boundaries in UTC
+              const startOfToday = new Date();
+              startOfToday.setUTCHours(0, 0, 0, 0); // 00:00:00 of today in UTC
+              
+              const endOfToday = new Date();
+              endOfToday.setUTCHours(23, 59, 59, 999); // 23:59:59 of today in UTC
+              
+              console.log('Today UTC boundaries:');
+              console.log('Start of today (UTC):', formatInTimeZone(startOfToday, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+              console.log('End of today (UTC):', formatInTimeZone(endOfToday, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+              
+              // First try the daily endpoint
+              try {
+                console.log('Fetching from daily endpoint...');
+                const result = await fetch(`${import.meta.env.VITE_DB_API_URL}/devices/${deviceId}/readings/daily`);
+                const data = await result.json();
+                
+                if (data.success && data.data.length > 0) {
+                  // Ensure we only get readings from today (between 00:00:00 and 23:59:59 UTC)
+                  deviceReadings = data.data.filter(reading => {
+                    const readingDate = new Date(reading.timestamp);
+                    const isInRange = readingDate >= startOfToday && readingDate <= endOfToday;
+                    
+                    if (isInRange) {
+                      console.log('Including reading:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+                    } else {
+                      console.log('Excluding reading:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+                    }
+                    
+                    return isInRange;
+                  });
+                  
+                  console.log(`Found ${deviceReadings.length} readings for today from daily endpoint`);
+                } else {
+                  throw new Error('No data from daily endpoint');
+                }
+              } catch (dailyError) {
+                console.log('Daily endpoint failed, using regular endpoint with filtering:', dailyError);
+                
+                // If daily endpoint fails, use the regular endpoint with 24 hours of data
+                const allReadings = await getDeviceReadings(deviceId, 24);
+                
+                // Filter to ensure we only get today's readings (between 00:00:00 and 23:59:59 UTC)
+                deviceReadings = allReadings.filter(reading => {
+                  const readingDate = new Date(reading.timestamp);
+                  const isInRange = readingDate >= startOfToday && readingDate <= endOfToday;
+                  
+                  if (isInRange) {
+                    console.log('Including reading:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+                  }
+                  
+                  return isInRange;
+                });
+                
+                console.log(`Found ${deviceReadings.length} readings for today from regular endpoint`);
+              }
+              
+              // Log the time range of the readings we found
+              if (deviceReadings.length > 0) {
+                const firstReading = new Date(deviceReadings[0].timestamp);
+                const lastReading = new Date(deviceReadings[deviceReadings.length - 1].timestamp);
+                console.log('First reading time:', formatInTimeZone(firstReading, 'UTC', 'HH:mm:ss'));
+                console.log('Last reading time:', formatInTimeZone(lastReading, 'UTC', 'HH:mm:ss'));
+              }
+            } else {
+              // For other dates, get readings for past week, then filter by selected date
+              console.log('Fetching readings for past date:', formatInTimeZone(selectedDate, 'UTC', 'yyyy-MM-dd'));
+              const allReadings = await getDeviceReadings(deviceId, 24 * 7);
+              deviceReadings = filterReadingsByDate(allReadings, selectedDate);
+              console.log(`Found ${deviceReadings.length} readings for selected date`);
+            }
+          } catch (error) {
+            console.error('Error fetching daily readings, falling back:', error);
+            // Fallback to regular endpoint with filtering
+            const startOfSelectedDay = new Date(selectedDate);
+            startOfSelectedDay.setUTCHours(0, 0, 0, 0); // 00:00:00 of the selected day in UTC
+            
+            const endOfSelectedDay = new Date(selectedDate);
+            endOfSelectedDay.setUTCHours(23, 59, 59, 999); // 23:59:59 of the selected day in UTC
+            
+            console.log('Fallback filtering with UTC boundaries:');
+            console.log('Start of day (UTC):', formatInTimeZone(startOfSelectedDay, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+            console.log('End of day (UTC):', formatInTimeZone(endOfSelectedDay, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+            
+            const allReadings = await getDeviceReadings(deviceId, 24 * 7);
+            deviceReadings = allReadings.filter(reading => {
+              const readingDate = new Date(reading.timestamp);
+              return readingDate >= startOfSelectedDay && readingDate <= endOfSelectedDay;
+            });
+          }
           setChartDateMode('daily');
           break;
+          
         case 'range':
           if (dateRange?.from && dateRange?.to) {
-            const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            deviceReadings = await getDeviceReadings(deviceId, diffDays * 24);
+            try {
+              // Use the specific endpoint for range readings
+              const from = format(dateRange.from, 'yyyy-MM-dd');
+              const to = format(dateRange.to, 'yyyy-MM-dd');
+              const result = await fetch(
+                `${import.meta.env.VITE_DB_API_URL}/devices/${deviceId}/readings/range?from=${from}&to=${to}`
+              );
+              const data = await result.json();
+              
+              if (data.success) {
+                deviceReadings = data.data;
+              } else {
+                // Fallback to regular endpoint if specific one fails
+                const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end dates
+                const allReadings = await getDeviceReadings(deviceId, diffDays * 24);
+                
+                // Filter readings that fall within the date range
+                deviceReadings = allReadings.filter(reading => {
+                  const readingDate = new Date(reading.timestamp);
+                  
+                  // Create proper UTC date boundaries
+                  const startDate = new Date(dateRange.from);
+                  startDate.setUTCHours(0, 0, 1, 0);
+                  
+                  const endDate = new Date(dateRange.to);
+                  endDate.setUTCHours(23, 59, 59, 999);
+                  
+                  return readingDate >= startDate && readingDate <= endDate;
+                });
+              }
+            } catch (error) {
+              console.error('Error fetching range readings, falling back:', error);
+              const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              const allReadings = await getDeviceReadings(deviceId, diffDays * 24);
+              
+              // Filter readings that fall within the date range
+              deviceReadings = allReadings.filter(reading => {
+                const readingDate = new Date(reading.timestamp);
+                
+                // Create proper UTC date boundaries
+                const startDate = new Date(dateRange.from);
+                startDate.setUTCHours(0, 0, 1, 0);
+                
+                const endDate = new Date(dateRange.to);
+                endDate.setUTCHours(23, 59, 59, 999);
+                
+                return readingDate >= startDate && readingDate <= endDate;
+              });
+            }
             setChartDateMode('range');
           }
           break;
       }
+      
+      // Sort readings by timestamp (ascending)
+      deviceReadings = deviceReadings.sort((a, b) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
       
       setReadings(deviceReadings);
       setLastUpdated(new Date());
@@ -262,28 +460,162 @@ const DeviceDetail = () => {
     }
   };
 
-  // Export data to CSV
+  // Export data to CSV with proper timezone formatting
   const exportData = () => {
     if (!device || readings.length === 0) return;
     
-    const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)'];
+    // Get the current date in UTC for the filename
+    const currentDateFormatted = formatInTimeZone(new Date(), 'UTC', 'yyyyMMdd-HHmmss');
+    
+    // Create a more descriptive filename based on the current tab
+    let filename = `device-${device.id}-${device.name}-`;
+    if (activeTab === 'latest') {
+      filename += `latest-${currentDateFormatted}`;
+    } else if (activeTab === 'daily') {
+      filename += `daily-${formatInTimeZone(selectedDate, 'UTC', 'yyyyMMdd')}`;
+    } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+      filename += `range-${formatInTimeZone(dateRange.from, 'UTC', 'yyyyMMdd')}-to-${formatInTimeZone(dateRange.to, 'UTC', 'yyyyMMdd')}`;
+    } else {
+      filename += currentDateFormatted;
+    }
+    
+    // Filter readings based on the current view mode
+    let filteredReadings: SensorReading[] = []; // Start with empty array
+    
+    if (activeTab === 'daily') {
+      // For daily view, ensure we only export data from the selected date
+      console.log('Filtering export data for daily view on date:', formatInTimeZone(selectedDate, 'UTC', 'yyyy-MM-dd'));
+      
+      // Create start and end boundaries for the selected date in UTC
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setUTCHours(0, 0, 0, 0); // 00:00:00 of the selected day in UTC
+      
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setUTCHours(23, 59, 59, 999); // 23:59:59 of the selected day in UTC
+      
+      console.log('Export filter - Start of day (UTC):', formatInTimeZone(startOfDay, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+      console.log('Export filter - End of day (UTC):', formatInTimeZone(endOfDay, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+      
+      // Apply strict filtering for the selected date
+      filteredReadings = readings.filter(reading => {
+        const readingDate = new Date(reading.timestamp);
+        const isInRange = readingDate >= startOfDay && readingDate <= endOfDay;
+        
+        if (isInRange) {
+          console.log('Including reading in export:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+        } else {
+          console.log('Excluding reading from export:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+        }
+        
+        return isInRange;
+      });
+      
+      console.log(`Export: Filtered from ${readings.length} to ${filteredReadings.length} readings`);
+      
+      // If no readings were found after filtering, show a warning
+      if (filteredReadings.length === 0 && readings.length > 0) {
+        console.warn('No readings found for the selected date after filtering!');
+        toast({
+          title: "No data for selected date",
+          description: "No readings found for the selected date in UTC time. Please select a different date.",
+          variant: "destructive",
+        });
+        return; // Exit the export function
+      }
+    } else if (activeTab === 'range' && dateRange?.from && dateRange?.to) {
+      // For range view, ensure we only export data from the selected date range
+      console.log('Filtering export data for range view from:', 
+        formatInTimeZone(dateRange.from, 'UTC', 'yyyy-MM-dd'), 
+        'to:', formatInTimeZone(dateRange.to, 'UTC', 'yyyy-MM-dd'));
+      
+      // Create start and end boundaries for the selected date range in UTC
+      const startDate = new Date(dateRange.from);
+      startDate.setUTCHours(0, 0, 0, 0); // 00:00:00 of the start day in UTC
+      
+      const endDate = new Date(dateRange.to);
+      endDate.setUTCHours(23, 59, 59, 999); // 23:59:59 of the end day in UTC
+      
+      console.log('Export filter - Start date (UTC):', formatInTimeZone(startDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+      console.log('Export filter - End date (UTC):', formatInTimeZone(endDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+      
+      // Apply strict filtering for the selected date range
+      filteredReadings = readings.filter(reading => {
+        const readingDate = new Date(reading.timestamp);
+        const isInRange = readingDate >= startDate && readingDate <= endDate;
+        
+        if (isInRange) {
+          console.log('Including reading in export:', formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+        }
+        
+        return isInRange;
+      });
+      
+      console.log(`Export: Filtered from ${readings.length} to ${filteredReadings.length} readings`);
+      
+      // If no readings were found after filtering, show a warning
+      if (filteredReadings.length === 0 && readings.length > 0) {
+        console.warn('No readings found for the selected date range after filtering!');
+        toast({
+          title: "No data for selected range",
+          description: "No readings found for the selected date range in UTC time. Please select a different range.",
+          variant: "destructive",
+        });
+        return; // Exit the export function
+      }
+    } else {
+      // For latest view or any other view, use all readings
+      filteredReadings = [...readings];
+    }
+    
+    // Add headers with more information
+    const headers = [
+      'Timestamp (UTC)',
+      'Temperature (°C)',
+      'Humidity (%)',
+      'Device ID',
+      'Device Name',
+      'Location'
+    ];
+    
+    // Create CSV content with proper timezone formatting
     const csvContent = [
       headers.join(','),
-      ...readings.map(reading => [
-        format(new Date(reading.timestamp), 'yyyy-MM-dd HH:mm:ss'),
-        reading.temperature,
-        reading.humidity
-      ].join(','))
+      ...filteredReadings.map(reading => {
+        // Format the timestamp in UTC to ensure consistency
+        const readingDate = new Date(reading.timestamp);
+        const formattedTimestamp = formatInTimeZone(readingDate, 'UTC', 'yyyy-MM-dd HH:mm:ss');
+        
+        return [
+          formattedTimestamp,
+          reading.temperature,
+          reading.humidity,
+          device.id,
+          device.name.replace(/,/g, ' '), // Remove commas to avoid CSV issues
+          (device.location?.name || 'Unknown').replace(/,/g, ' ')
+        ].join(',');
+      })
     ].join('\n');
     
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Add a BOM (Byte Order Mark) for Excel compatibility
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `device-${device.id}-${format(new Date(), 'yyyyMMdd')}.csv`);
+    link.setAttribute('download', `${filename}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Clean up
+    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+    
+    // Notify user
+    toast({
+      title: "Export successful",
+      description: `${filteredReadings.length} records exported to ${filename}.csv`,
+    });
   };
 
   // Show loading state
@@ -510,8 +842,18 @@ const DeviceDetail = () => {
                         selected={selectedDate}
                         onSelect={(date) => {
                           if (date && deviceIdRef.current) {
-                            setSelectedDate(date);
-                            fetchReadings(deviceIdRef.current, 'daily');
+                            // Set the selected date with proper UTC time
+                            const newDate = new Date(date);
+                            newDate.setUTCHours(12, 0, 0, 0); // Set to noon UTC to avoid timezone issues
+                            
+                            console.log('Calendar date selected:', formatInTimeZone(date, 'UTC', 'yyyy-MM-dd'));
+                            console.log('Normalized date for UTC:', formatInTimeZone(newDate, 'UTC', 'yyyy-MM-dd HH:mm:ss'));
+                            
+                            setSelectedDate(newDate);
+                            // Force refresh with the new date
+                            setTimeout(() => {
+                              fetchReadings(deviceIdRef.current!, 'daily');
+                            }, 0);
                           }
                         }}
                         initialFocus

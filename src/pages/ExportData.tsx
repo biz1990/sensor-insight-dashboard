@@ -13,6 +13,22 @@ import { DateRange as DayPickerDateRange } from 'react-day-picker';
 import { getDevices, getDeviceReadings } from '@/services/databaseService';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
+// Helper function to convert UTC+7 timestamp to local time
+const convertUtc7ToLocal = (timestamp) => {
+  // Create a date object from the timestamp
+  const date = new Date(timestamp);
+  
+  // Get the UTC time in milliseconds
+  const utcTime = date.getTime();
+  
+  // Subtract 7 hours (in milliseconds) to get the actual UTC time
+  // since the database stores timestamps in UTC+7
+  const actualUtcTime = utcTime - (7 * 60 * 60 * 1000);
+  
+  // Create a new date using the actual UTC time
+  return new Date(actualUtcTime);
+};
+
 const AlertComponent = ({ status }) => {
   if (status === 'error') {
     return (
@@ -87,14 +103,30 @@ const ExportData = () => {
       const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
+      // Add 1 day to ensure we capture the full end date
+      const hoursToFetch = (diffDays + 1) * 24;
+      
       let exportData = [];
       
       if (selectedDevice === 'all') {
         // Export data for all devices
         for (const device of devices) {
           try {
-            const readings = await getDeviceReadings(device.id, diffDays * 24);
-            exportData.push(...readings.map(reading => ({
+            const readings = await getDeviceReadings(device.id, hoursToFetch);
+            
+            // Filter readings to only include those within the selected date range
+            const filteredReadings = readings.filter(reading => {
+              const readingDate = convertUtc7ToLocal(reading.timestamp);
+              const fromDate = new Date(dateRange.from);
+              fromDate.setHours(0, 0, 0, 0); // Start of day
+              
+              const toDate = new Date(dateRange.to);
+              toDate.setHours(23, 59, 59, 999); // End of day
+              
+              return readingDate >= fromDate && readingDate <= toDate;
+            });
+            
+            exportData.push(...filteredReadings.map(reading => ({
               deviceId: device.id,
               deviceName: device.name,
               ...reading,
@@ -109,8 +141,21 @@ const ExportData = () => {
         const device = devices.find(d => d.id === deviceId);
         if (device) {
           try {
-            const readings = await getDeviceReadings(deviceId, diffDays * 24);
-            exportData = readings.map(reading => ({
+            const readings = await getDeviceReadings(deviceId, hoursToFetch);
+            
+            // Filter readings to only include those within the selected date range
+            const filteredReadings = readings.filter(reading => {
+              const readingDate = convertUtc7ToLocal(reading.timestamp);
+              const fromDate = new Date(dateRange.from);
+              fromDate.setHours(0, 0, 0, 0); // Start of day
+              
+              const toDate = new Date(dateRange.to);
+              toDate.setHours(23, 59, 59, 999); // End of day
+              
+              return readingDate >= fromDate && readingDate <= toDate;
+            });
+            
+            exportData = filteredReadings.map(reading => ({
               deviceId: device.id,
               deviceName: device.name,
               ...reading,
@@ -125,25 +170,41 @@ const ExportData = () => {
         toast({
           title: "No data",
           description: "No data available for the selected criteria.",
-          variant: "warning",
+          variant: "default",
         });
         return;
       }
       
-      // Sort by timestamp
-      exportData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      // Sort by timestamp (convert to local time for consistent sorting)
+      exportData.sort((a, b) => convertUtc7ToLocal(b.timestamp).getTime() - convertUtc7ToLocal(a.timestamp).getTime());
+      
+      // Log the first timestamp for debugging
+      if (exportData.length > 0) {
+        console.log('Original timestamp from DB:', exportData[0].timestamp);
+        console.log('As Date object (interpreted as UTC):', new Date(exportData[0].timestamp));
+        console.log('Converted to local time:', convertUtc7ToLocal(exportData[0].timestamp));
+        console.log('Current local time:', new Date());
+      }
       
       // Convert to CSV
       const headers = ['Device ID', 'Device Name', 'Timestamp', 'Temperature (°C)', 'Humidity (%)'];
       const csvContent = [
         headers.join(','),
-        ...exportData.map(item => [
-          item.deviceId,
-          `"${item.deviceName}"`,
-          format(new Date(item.timestamp), 'yyyy-MM-dd HH:mm:ss'),
-          item.temperature,
-          item.humidity
-        ].join(','))
+        ...exportData.map(item => {
+          // Convert the UTC+7 timestamp from the database to local time
+          const localTime = convertUtc7ToLocal(item.timestamp);
+          
+          // Format the local time
+          const formattedTimestamp = format(localTime, 'yyyy-MM-dd HH:mm:ss');
+          
+          return [
+            item.deviceId,
+            `"${item.deviceName}"`,
+            formattedTimestamp,
+            item.temperature,
+            item.humidity
+          ].join(',');
+        })
       ].join('\n');
       
       // Create blob and download
